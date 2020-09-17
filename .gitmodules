@@ -4,3 +4,7 @@
 [submodule "lib/log.c"]
 	path = lib/log.c
 	url = https://github.com/rxi/log.c.git
+[submodule "lib/picotcpls"]
+	path = lib/picotcpls
+	url = https://github.com/frochet/picotcpls.git
+	branch = master

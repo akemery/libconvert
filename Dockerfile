@@ -30,3 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget
 
 RUN pip3 install scapy
+
+#RUN wget http://ftp.de.debian.org/debian/pool/main/o/openssl/libssl1.1_1.1.1g-1_amd64.deb && dpkg -i libssl1.1_1.1.1g-1_amd64.deb
+
+#RUN wget http://ftp.de.debian.org/debian/pool/main/o/openssl/libssl-dev_1.1.1g-1_amd64.deb && dpkg  -i /home/tcp/libconvert/libssl-dev_1.1.1g-1_amd64.deb

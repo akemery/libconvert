@@ -86,8 +86,10 @@ _hook(long syscall_number, long arg0, long arg1,  long arg2, long UNUSED arg3,
     case SYS_close:
       return _handle_close();
 #endif
-  }
-  return 0;    
+    default:
+      /* The default behavior is to run the default syscall. */
+      return SYSCALL_RUN;
+  }  
 }
 
 static __attribute__((constructor)) void init(void) {

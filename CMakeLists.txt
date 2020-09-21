@@ -21,9 +21,13 @@ add_library(convert_util SHARED convert_util.c)
 add_library(convert_client SHARED convert_client.c lib/log.c/src/log.c)
 target_link_libraries(convert_client PRIVATE syscall_intercept_static convert_util)
 
+# libconvert_tcpls
+add_library(convert_tcpls SHARED convert_tcpls.c lib/log.c/src/log.c)
+target_link_libraries(convert_tcpls PRIVATE picotls-core picotls-minicrypto picotls-openssl )
+
 # libconvert_tcpls_client
 add_library(convert_tcpls_client SHARED convert_tcpls_client.c lib/log.c/src/log.c)
-target_link_libraries(convert_tcpls_client PRIVATE syscall_intercept_static convert_util)
+target_link_libraries(convert_tcpls_client PRIVATE syscall_intercept_static convert_util convert_tcpls)
 
 # libconvert_tcpls_server
 add_library(convert_tcpls_server SHARED convert_tcpls_server.c lib/log.c/src/log.c)

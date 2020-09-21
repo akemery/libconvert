@@ -29,6 +29,8 @@ static int _handle_socket(long arg0, long arg1, long arg2, long *result){
       _alloc((int)*result);
 #endif
 
+    /* TCPLS initialization */
+    _tcpls_init(0);
     /* skip as we executed the syscall ourself. */
     return SYSCALL_SKIP;
   }
@@ -59,7 +61,7 @@ UNUSED static void _log_lock(UNUSED void *udata, int lock){
 }
 
 static int
-_hook(long syscall_number, UNUSED long arg0, UNUSED long arg1, UNUSED long arg2, long UNUSED arg3,
+_hook(long syscall_number, long arg0, long arg1, long arg2, long UNUSED arg3,
       UNUSED long arg4, UNUSED long arg5, long *result){
   switch(syscall_number){
     case SYS_socket:
@@ -74,8 +76,10 @@ _hook(long syscall_number, UNUSED long arg0, UNUSED long arg1, UNUSED long arg2,
     case SYS_close:
       return _handle_close();
 #endif
+    default:
+      /* The default behavior is to run the default syscall. */
+      return SYSCALL_RUN;
   } 
-  return 0;   
 }
 static __attribute__((constructor)) void init(void) {
   UNUSED char err_buf[1024];

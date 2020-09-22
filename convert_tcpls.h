@@ -1,4 +1,3 @@
-
 int _tcpls_init(int is_server);
 
 struct cli_data {

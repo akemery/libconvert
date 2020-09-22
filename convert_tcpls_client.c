@@ -24,13 +24,14 @@ static int _handle_socket(long arg0, long arg1, long arg2, long *result){
     log_debug("handle socket(%ld, %ld, %ld)", arg0, arg1, arg2);
     *result = syscall_no_intercept(SYS_socket, arg0, arg1, arg2);
     log_debug("-> fd: %d", (int)*result);
-#if 0
-    if (*result >= 0)
-      _alloc((int)*result);
-#endif
-
-    /* TCPLS initialization */
-    _tcpls_init(0);
+    
+    if (*result >= 0){
+      /* TCPLS context initializing */
+      _tcpls_init(0);
+      /* TCPLS allocating con_info */
+      _tcpls_alloc_con_info(*result);
+    }
+    
     /* skip as we executed the syscall ourself. */
     return SYSCALL_SKIP;
   }

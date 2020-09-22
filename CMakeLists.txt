@@ -31,7 +31,7 @@ target_link_libraries(convert_tcpls_client PRIVATE syscall_intercept_static conv
 
 # libconvert_tcpls_server
 add_library(convert_tcpls_server SHARED convert_tcpls_server.c lib/log.c/src/log.c)
-target_link_libraries(convert_tcpls_server PRIVATE syscall_intercept_static convert_util)
+target_link_libraries(convert_tcpls_server PRIVATE syscall_intercept_static convert_util convert_tcpls)
 
 # Unit & integration tests
 add_subdirectory(tests)

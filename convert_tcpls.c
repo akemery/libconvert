@@ -10,8 +10,8 @@
 
 #include "convert_tcpls.h"
 
-const char * cert = "hello";
-const char * cert_key = "hello";
+const char * cert = "assets/server.crt";
+const char * cert_key = "assets/server.key";
 
 static ptls_context_t *ctx;
 static tcpls_t *tcpls;
@@ -161,11 +161,7 @@ static ptls_context_t *set_tcpls_ctx_options(int is_server){
   ERR_load_crypto_strings();
   OpenSSL_add_all_algorithms();
   ctx = (ptls_context_t *)malloc(sizeof(*ctx));
-  memset(ctx, 0, sizeof(ptls_context_t));
-  if (ptls_load_certificates(ctx, (char *)cert) != 0)
-    log_debug("failed to load certificate:%s:%s\n", cert, strerror(errno));
-  load_private_key(ctx, (char*)cert_key);
-    
+  memset(ctx, 0, sizeof(ptls_context_t));  
   ctx->support_tcpls_options = 1;
   ctx->random_bytes = ptls_openssl_random_bytes;
   ctx->key_exchanges = ptls_openssl_key_exchanges;
@@ -182,7 +178,11 @@ static ptls_context_t *set_tcpls_ctx_options(int is_server){
     ctx->connection_event_cb = &handle_client_connection_event;
   }else{
     ctx->stream_event_cb = &handle_stream_event;  
-    ctx->connection_event_cb = &handle_connection_event;  
+    ctx->connection_event_cb = &handle_connection_event;
+    if (ptls_load_certificates(ctx, (char *)cert) != 0)
+      log_debug("failed to load certificate:%s:%s\n", cert, strerror(errno));
+    if(load_private_key(ctx, (char*)cert_key)!=0)
+      log_debug("failed apply ket :%s:%s\n", cert_key, strerror(errno));  
   }
 done:
   return ctx;
@@ -246,9 +246,20 @@ int do_tcpls_handshake(int sd){
 int _tcpls_init(int is_server){
   log_debug("Initialization of tcpls %d\n", is_server);
   set_tcpls_ctx_options(is_server);
-  if(!is_server)
+  if(!is_server){
     tcpls = tcpls_new(ctx, is_server);
+    if(!tcpls)
+      return -1;
+  }
+  tcpls_con_l = new_list(sizeof(struct tcpls_con),2);
+  if(!tcpls_con_l)
+    return -1;
   return 0;
+}
+
+int _tcpls_alloc_con_info(int sd){
+  struct tcpls_con *con = (struct tcpls_con *)malloc(sizeof(struct tcpls_con));
+  
 }
 
 

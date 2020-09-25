@@ -17,6 +17,7 @@ static ptls_context_t *ctx;
 static tcpls_t *tcpls;
 static struct cli_data cli_data;
 static list_t *tcpls_con_l;
+static list_t *ours_addr_list;
 
 static int handle_mpjoin(int socket, uint8_t *connid, uint8_t *cookie, uint32_t transportid, void *cbdata) ;
 static int handle_connection_event(tcpls_event_t event, int socket, int transportid, void *cbdata) ;
@@ -179,6 +180,7 @@ static ptls_context_t *set_tcpls_ctx_options(int is_server){
   }else{
     ctx->stream_event_cb = &handle_stream_event;  
     ctx->connection_event_cb = &handle_connection_event;
+    ctx->cb_data = tcpls_con_l;
     if (ptls_load_certificates(ctx, (char *)cert) != 0)
       log_debug("failed to load certificate:%s:%s\n", cert, strerror(errno));
     if(load_private_key(ctx, (char*)cert_key)!=0)
@@ -252,6 +254,7 @@ int _tcpls_init(int is_server){
       return -1;
   }
   tcpls_con_l = new_list(sizeof(struct tcpls_con),2);
+  ours_addr_list = new_list(sizeof(struct sockaddr), 2);
   if(!tcpls_con_l)
     return -1;
   return 0;
@@ -259,6 +262,8 @@ int _tcpls_init(int is_server){
 
 int _tcpls_alloc_con_info(int sd){
   struct tcpls_con *con = (struct tcpls_con *)malloc(sizeof(struct tcpls_con));
+  if(!con)
+    return -1;
   con->sd = sd;
   con->state = CLOSED;
   list_add(tcpls_con_l, con); 
@@ -306,6 +311,58 @@ int _handle_tcpls_connect(int sd, struct sockaddr * dest){
     if(result)
       return result;
   }
-  result = tcpls_connect(tcpls->tls, NULL, dest, &timeout);
+  if(dest->sa_family == AF_INET6){
+    result = tcpls_add_v6(tcpls->tls, (struct sockaddr_in6*)dest, 1, 0, 0);
+    if(result)
+      return result;
+  }
+  result = tcpls_connect(tcpls->tls, NULL, dest, &timeout, sd);
+  log_debug("TCPLS tcpls_connect %d\n", result);
   return result;
+}
+
+int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
+  int result = -1, i;
+  log_debug("TCPLS  tcpls_accept %d:%d\n", sd, addr->sa_family);
+  result = _tcpls_alloc_con_info(sd);
+  if(result < 0)
+    return result;
+  tcpls = tcpls_new(ctx, 1);
+  if(!tcpls)
+    return -1;
+  if(addr->sa_family == AF_INET){
+    result = tcpls_add_v4(tcpls->tls, (struct sockaddr_in*)addr, 1, 0, 0);
+    if(result)
+      return result;
+  }
+  if(addr->sa_family == AF_INET6){
+    result = tcpls_add_v6(tcpls->tls, (struct sockaddr_in6*)addr, 1, 0, 0);
+    if(result)
+      return result;
+  }
+  for(i = 0; i < ours_addr_list->size; i++){
+    struct sockaddr *our_addr = list_get(ours_addr_list, i);
+    if(our_addr->sa_family == AF_INET){
+      result = tcpls_add_v4(tcpls->tls, (struct sockaddr_in*)our_addr, 0, 1, 1);
+      if(result)
+        return result;
+    }
+    if(addr->sa_family == AF_INET6){
+      result = tcpls_add_v6(tcpls->tls, (struct sockaddr_in6*)our_addr, 0, 1, 1);
+      if(result)
+        return result;
+    }
+  }
+  result = tcpls_accept(tcpls, sd, NULL, 0);
+  if(result < 0)
+    log_debug("TCPLS tcpls_accept failed %d\n", result);
+  log_debug("TCPLS tcpls_accept %d:%d\n", sd, result);
+  return result;
+}
+
+int _tcpls_set_ours_addr(struct sockaddr *addr){
+  if(!ours_addr_list)
+    return -1;
+  list_add(ours_addr_list, addr);
+  return ours_addr_list->size;
 }

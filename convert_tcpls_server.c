@@ -49,8 +49,9 @@ static int _handle_bind(long arg0, long arg1, long arg2, long *result){
   switch (addr->sa_family) {
     case AF_INET:
     case AF_INET6:
-      *result = syscall_no_intercept(SYS_bind, arg0, arg1, arg2);;
-        break;
+      *result = syscall_no_intercept(SYS_bind, arg0, arg1, arg2);
+      _tcpls_set_ours_addr(addr);
+      break;
     default:
       log_warn("sd %d specified an invalid address family %d", sd,
 		   addr->sa_family);
@@ -91,7 +92,11 @@ static int _handle_accept4(long arg0, long arg1, long arg2, long arg3, long *res
   *result = syscall_no_intercept(SYS_accept4, arg0, arg1, arg2, arg3);
   if(*result >= 0){
     log_debug("TCPLS accept4 on %d:%d", sd, *result);
-    _tcpls_alloc_con_info(*result);
+    *result = _tcpls_do_tcpls_accept(arg0, (struct sockaddr *)arg1);
+    if(*result < 0){
+      log_debug("TCPLS tcpls_accept failed %d", *result);
+      return SYSCALL_RUN;
+    }
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS accept4 on %d failed with error: %d", sd, *result);

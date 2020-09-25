@@ -217,32 +217,20 @@ static int handle_mpjoin(int socket, uint8_t *connid, uint8_t *cookie, uint32_t 
   return -1;
 }
 
-int do_tcpls_handshake(int sd){
-  int i, ret = -1, found = 0;
-  struct tcpls_con *con = NULL;
-  for(i = 0; i < tcpls_con_l->size ; i++){
-    con = list_get(tcpls_con_l, i);
-      if(con->sd == sd){
-        found = 1 ;
-        break;
-      }
-  }
+static int tcpls_do_handshake(int sd){
+  int resultat = -1;
   ptls_handshake_properties_t prop = {NULL};
   memset(&prop, 0, sizeof(prop));
   prop.socket = sd;
   prop.received_mpjoin_to_process = &handle_mpjoin;
-  log_debug("TCPLS:TLS con %p:%p:%d\n", con->tcpls, con->tcpls->tls, con->tcpls->tls->state);
-  if ((ret = tcpls_handshake(con->tcpls->tls, &prop)) != 0) {
-    if (ret == PTLS_ERROR_HANDSHAKE_IS_MPJOIN) {
-      if(found && con->tcpls){
-        log_debug("1 handshake conn: %d:%d:\n", con->sd, con->tcpls->streams->size); 
-        log_debug("2 handshake conn: %d:%d:\n", con->sd, con->tcpls->streams->size);
-      }
-      return ret;
-    }
-    log_debug("tcpls_handshake failed with ret (%d)\n", ret);
+  log_debug("1: tcpls_handshake %d", resultat);
+  if ((resultat = tcpls_handshake(tcpls->tls, &prop)) != 0) {
+    if (resultat == PTLS_ERROR_HANDSHAKE_IS_MPJOIN) 
+      return resultat;
+    log_warn("tcpls_handshake failed with ret (%d)\n", resultat);
   }
-  return ret;
+  log_debug("2: tcpls_handshake %d", resultat);
+  return resultat;
 }
 
 int _tcpls_init(int is_server){
@@ -322,7 +310,9 @@ int _handle_tcpls_connect(int sd, struct sockaddr * dest){
 }
 
 int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
-  int result = -1, i;
+  int result = -1;
+  struct sockaddr our_addr;
+  socklen_t salen = sizeof(struct sockaddr);
   log_debug("TCPLS  tcpls_accept %d:%d\n", sd, addr->sa_family);
   result = _tcpls_alloc_con_info(sd);
   if(result < 0)
@@ -340,18 +330,18 @@ int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
     if(result)
       return result;
   }
-  for(i = 0; i < ours_addr_list->size; i++){
-    struct sockaddr *our_addr = list_get(ours_addr_list, i);
-    if(our_addr->sa_family == AF_INET){
-      result = tcpls_add_v4(tcpls->tls, (struct sockaddr_in*)our_addr, 0, 1, 1);
-      if(result)
-        return result;
-    }
-    if(addr->sa_family == AF_INET6){
-      result = tcpls_add_v6(tcpls->tls, (struct sockaddr_in6*)our_addr, 0, 1, 1);
-      if(result)
-        return result;
-    }
+  if (getsockname(sd, (struct sockaddr *) &our_addr, &salen) < 0) {
+    log_debug("getsockname(2) failed %d:%d", errno, sd);
+  }
+  if(our_addr.sa_family == AF_INET){
+    result = tcpls_add_v4(tcpls->tls, (struct sockaddr_in*)&our_addr, 0, 1, 1);
+    if(result)
+      return result;
+  }
+  if(our_addr.sa_family == AF_INET6){
+    result = tcpls_add_v6(tcpls->tls, (struct sockaddr_in6*)&our_addr, 0, 1, 1);
+    if(result)
+      return result;
   }
   result = tcpls_accept(tcpls, sd, NULL, 0);
   if(result < 0)
@@ -365,4 +355,14 @@ int _tcpls_set_ours_addr(struct sockaddr *addr){
     return -1;
   list_add(ours_addr_list, addr);
   return ours_addr_list->size;
+}
+
+int _tcpls_handshake(int sd){
+  int result = -1;
+  if(ptls_handshake_is_complete(tcpls->tls))
+    return 0;
+  struct tcpls_con *con = _tcpls_lookup(sd);
+  if(!con)
+    return result;
+  return  tcpls_do_handshake(sd); 
 }

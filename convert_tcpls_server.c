@@ -92,7 +92,7 @@ static int _handle_accept4(long arg0, long arg1, long arg2, long arg3, long *res
   *result = syscall_no_intercept(SYS_accept4, arg0, arg1, arg2, arg3);
   if(*result >= 0){
     log_debug("TCPLS accept4 on %d:%d", sd, *result);
-    *result = _tcpls_do_tcpls_accept(arg0, (struct sockaddr *)arg1);
+    *result = _tcpls_do_tcpls_accept(*result, (struct sockaddr *)arg1);
     if(*result < 0){
       log_debug("TCPLS tcpls_accept failed %d", *result);
       return SYSCALL_RUN;
@@ -127,6 +127,13 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+#if 1
+  *result = _tcpls_handshake(sd);
+  if(*result < 0){
+    log_debug("handshake failed %d:%d", sd, *result);
+  }
+#endif
+
   *result = syscall_no_intercept(SYS_read, arg0, arg1, arg2);
   if(*result >= 0){
     log_debug("TCPLS read on %d:%d", sd, *result);

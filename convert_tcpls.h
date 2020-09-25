@@ -5,6 +5,7 @@ int _tcpls_free_con(int sd);
 int _tcpls_set_ours_addr(struct sockaddr *addr);
 int _handle_tcpls_connect(int sd, struct sockaddr * dest);
 int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr);
+int _tcpls_handshake(int sd);
 
 struct cli_data {
   list_t *socklist;

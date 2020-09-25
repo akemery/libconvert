@@ -94,6 +94,12 @@ static int _handle_recvfrom(long arg0, long arg1, long arg2, long arg3, long arg
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+#if 1
+  *result = _tcpls_handshake(sd);
+  if(*result < 0){
+    log_debug("handshake failed %d:%d", sd, *result);
+  }
+#endif
   *result = syscall_no_intercept(SYS_recvfrom, arg0, arg1, arg2, arg3, arg4, arg5);
   if(*result >= 0){
     log_debug("TCPLS recvfrom on %d:%d\n", sd, *result);

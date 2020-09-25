@@ -259,7 +259,53 @@ int _tcpls_init(int is_server){
 
 int _tcpls_alloc_con_info(int sd){
   struct tcpls_con *con = (struct tcpls_con *)malloc(sizeof(struct tcpls_con));
-  
+  con->sd = sd;
+  con->state = CLOSED;
+  list_add(tcpls_con_l, con); 
+  log_debug("adding new socket %d:%d\n",sd, tcpls_con_l->size);
+  return tcpls_con_l->size;
 }
 
+struct tcpls_con *_tcpls_lookup(int sd){
+  int i;
+  struct tcpls_con * con;
+  if(!tcpls_con_l || !tcpls_con_l->size)
+    return NULL;
+  for(i = 0; i < tcpls_con_l->size; i++){
+    con = list_get(tcpls_con_l, i);
+    if(con->sd == sd)
+      return con;
+  }
+  return NULL;
+}
 
+int _tcpls_free_con(int sd){
+  int i;
+  struct tcpls_con * con;
+  if(!tcpls_con_l || !tcpls_con_l->size)
+    return -1;
+  for(i=0; i < tcpls_con_l->size; i++){
+    con = list_get(tcpls_con_l, i);
+    if(con->sd == sd){
+      list_remove(tcpls_con_l, con);
+      log_debug("Connexion %d closed removing socket on list with size %d\n", sd, tcpls_con_l->size);
+      return 0;
+    }
+  }
+  return -1;
+}
+
+int _handle_tcpls_connect(int sd, struct sockaddr * dest){
+  int result = -1;
+  struct timeval timeout = {.tv_sec = 2, .tv_usec = 0};
+  struct tcpls_con *con = _tcpls_lookup(sd);
+  if(!con)
+    return result;
+  if(dest->sa_family == AF_INET){
+    result = tcpls_add_v4(tcpls->tls, (struct sockaddr_in*)dest, 1, 0, 0);
+    if(result)
+      return result;
+  }
+  result = tcpls_connect(tcpls->tls, NULL, dest, &timeout);
+  return result;
+}

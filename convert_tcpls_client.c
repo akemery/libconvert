@@ -38,20 +38,132 @@ static int _handle_socket(long arg0, long arg1, long arg2, long *result){
   return SYSCALL_RUN;
 }
 
-UNUSED static int _handle_connect(void){
-  return 0;
+static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result){
+  struct tcpls_con *con;
+  struct sockaddr *	dest	= (struct sockaddr *)arg1;
+  int sd = (int)arg0;
+
+  con = _tcpls_lookup(sd);
+  if (!con)
+    return SYSCALL_RUN;
+    
+  log_debug("Opening TCPLS connexion on sd:%d", sd);
+
+  switch (dest->sa_family) {
+    case AF_INET:
+    case AF_INET6:
+      //*result = syscall_no_intercept(SYS_connect, arg0, arg1, arg2);
+      *result = _handle_tcpls_connect(sd, dest);
+        break;
+    default:
+      log_warn("sd %d specified an invalid address family %d", sd,
+		   dest->sa_family);
+      goto error;
+  }
+
+  if (*result >= 0) {
+    log_debug("TCPLS connexion opened on %d:%d", sd, *result);
+    return SYSCALL_SKIP;
+  }
+
+  log_warn("TCPLS connexion %d failed with error: %d", sd, *result);
+error:
+  return SYSCALL_RUN;
 }
 
-UNUSED static int _handle_send(void){
-  return 0;
+static int _handle_read(long arg0, long arg1, long arg2, long *result){
+  struct tcpls_con *con;
+  int sd = (int)arg0;
+  log_debug("TCPLS read on %d\n", sd);
+  con = _tcpls_lookup(sd);
+  if(!con)
+    return SYSCALL_RUN;
+  *result = syscall_no_intercept(SYS_read, arg0, arg1, arg2);
+  if(*result >= 0){
+    log_debug("TCPLS read on %d:%d\n", sd, *result);
+    return SYSCALL_SKIP;
+  }
+  log_warn("TCPLS read %d failed with error: %d", sd, *result);
+  return SYSCALL_RUN;
 }
 
-UNUSED static int _handle_recv(void){
-  return 0;
+static int _handle_recvfrom(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long *result){
+  struct tcpls_con *con;
+  int sd = (int)arg0;
+  log_debug("TCPLS recvfrom on %d\n", sd);
+  con = _tcpls_lookup(sd);
+  if(!con)
+    return SYSCALL_RUN;
+  *result = syscall_no_intercept(SYS_recvfrom, arg0, arg1, arg2, arg3, arg4, arg5);
+  if(*result >= 0){
+    log_debug("TCPLS recvfrom on %d:%d\n", sd, *result);
+    return SYSCALL_SKIP;
+  }
+  log_warn("TCPLS recvfrom %d failed with error: %d", sd, *result);
+  return SYSCALL_RUN;
 }
 
-UNUSED static int _handle_close(void){
-  return 0;
+static int _handle_recvmsg(long arg0, long arg1, long arg2, long *result){
+  struct tcpls_con *con;
+  int sd = (int)arg0;
+  log_debug("TCPLS recvmsg on %d\n", sd);
+  con = _tcpls_lookup(sd);
+  if(!con)
+    return SYSCALL_RUN;
+  *result = syscall_no_intercept(SYS_recvmsg, arg0, arg1, arg2);
+  if(*result >= 0){
+    log_debug("TCPLS recvmsg on %d:%d\n", sd, *result);
+    return SYSCALL_SKIP;
+  }
+  log_warn("TCPLS recvmsg %d failed with error: %d", sd, *result);
+  return SYSCALL_RUN;
+}
+
+static int _handle_sendto(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long *result){
+  struct tcpls_con *con;
+  int sd = (int)arg0;
+  log_debug("TCPLS sendto on %d\n", sd);
+  con = _tcpls_lookup(sd);
+  if(!con)
+    return SYSCALL_RUN;
+  *result = syscall_no_intercept(SYS_sendto, arg0, arg1, arg2, arg3, arg4, arg5);
+  if(*result >= 0){
+    log_debug("TCPLS sendto on %d:%d\n", sd, *result);
+    return SYSCALL_SKIP;
+  }
+  log_warn("TCPLS sendto %d failed with error: %d", sd, *result);
+  return SYSCALL_RUN;
+}
+
+static int _handle_sendmsg(long arg0, long arg1, long arg2, long *result){
+  struct tcpls_con *con;
+  int sd = (int)arg0;
+  log_debug("TCPLS sendmsg on %d\n", sd);
+  con = _tcpls_lookup(sd);
+  if(!con)
+    return SYSCALL_RUN;
+  *result = syscall_no_intercept(SYS_sendmsg, arg0, arg1, arg2);
+  if(*result >= 0){
+    log_debug("TCPLS sendmsg on %d:%d\n", sd, *result);
+    return SYSCALL_SKIP;
+  }
+  log_warn("TCPLS sendmsg %d failed with error: %d", sd, *result);
+  return SYSCALL_RUN;
+}
+
+static int _handle_close(long arg0, long *result){
+  int sd = (int)arg0;
+  if(_tcpls_free_con(sd)){
+      //log_debug("not handled socket %d:%d failed\n", sd, *result);
+      return SYSCALL_RUN;
+  }
+  *result = syscall_no_intercept(SYS_close, arg0);
+  if(*result >= 0){
+    log_debug("connexion closed %d:%d\n", sd, *result);
+    return SYSCALL_SKIP;
+  }
+  log_debug("connexion closed %d:%d failed\n", sd, *result);
+  return SYSCALL_RUN;
 }
 
 UNUSED static void _log_lock(UNUSED void *udata, int lock){
@@ -63,20 +175,24 @@ UNUSED static void _log_lock(UNUSED void *udata, int lock){
 
 static int
 _hook(long syscall_number, long arg0, long arg1, long arg2, long UNUSED arg3,
-      UNUSED long arg4, UNUSED long arg5, long *result){
+       long arg4,  long arg5, long *result){
   switch(syscall_number){
     case SYS_socket:
       return _handle_socket(arg0, arg1, arg2, result);
-#if 0
     case SYS_connect:
-      return _handle_connect();
-    case SYS_send:
-      return _handle_send();
-    case SYS_recv:
-      return _handle_recv();
+      return _handle_connect(arg0, arg1,  arg2, result);
+    case SYS_read:
+      return _handle_read(arg0, arg1,arg2, result);
+    case SYS_recvfrom:
+      return _handle_recvfrom(arg0, arg1, arg2, arg3, arg4, arg5, result);
+    case SYS_recvmsg:
+      return _handle_recvmsg(arg0, arg1, arg2, result);
     case SYS_close:
-      return _handle_close();
-#endif
+      return _handle_close(arg0, result);
+    case SYS_sendto:
+      return _handle_sendto(arg0, arg1, arg2, arg3, arg4, arg5, result);
+    case SYS_sendmsg:
+      return _handle_sendmsg(arg0, arg1, arg2, result);
     default:
       /* The default behavior is to run the default syscall. */
       return SYSCALL_RUN;

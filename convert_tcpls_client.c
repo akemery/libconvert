@@ -27,6 +27,7 @@ static int _handle_socket(long arg0, long arg1, long arg2, long *result){
     
     if (*result >= 0){
       /* TCPLS context initializing */
+      log_debug("init TCPLS context %d %d", *result, arg0);
       _tcpls_init(0);
       /* TCPLS allocating con_info */
       _tcpls_alloc_con_info(*result);
@@ -41,7 +42,7 @@ static int _handle_socket(long arg0, long arg1, long arg2, long *result){
 static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result){
   struct tcpls_con *con;
   struct sockaddr *	dest	= (struct sockaddr *)arg1;
-  int sd = (int)arg0;
+  int sd = (int)arg0, ret;
 
   con = _tcpls_lookup(sd);
   if (!con)
@@ -62,6 +63,11 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
   }
 
   if (*result >= 0) {
+    ret = _tcpls_handshake(sd);
+    if(ret < 0){
+      log_warn("handshake failed %d:%d", sd, *result);
+      return SYSCALL_RUN;
+    }
     log_debug("TCPLS connexion opened on %d:%d", sd, *result);
     return SYSCALL_SKIP;
   }
@@ -74,10 +80,10 @@ error:
 static int _handle_read(long arg0, long arg1, long arg2, long *result){
   struct tcpls_con *con;
   int sd = (int)arg0;
-  log_debug("TCPLS read on %d\n", sd);
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+  log_debug("TCPLS read on %d\n", sd);
   *result = syscall_no_intercept(SYS_read, arg0, arg1, arg2);
   if(*result >= 0){
     log_debug("TCPLS read on %d:%d\n", sd, *result);
@@ -90,16 +96,10 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
 static int _handle_recvfrom(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long *result){
   struct tcpls_con *con;
   int sd = (int)arg0;
-  log_debug("TCPLS recvfrom on %d\n", sd);
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
-#if 1
-  *result = _tcpls_handshake(sd);
-  if(*result < 0){
-    log_debug("handshake failed %d:%d", sd, *result);
-  }
-#endif
+  log_debug("TCPLS recvfrom on %d\n", sd);
   *result = syscall_no_intercept(SYS_recvfrom, arg0, arg1, arg2, arg3, arg4, arg5);
   if(*result >= 0){
     log_debug("TCPLS recvfrom on %d:%d\n", sd, *result);
@@ -112,10 +112,10 @@ static int _handle_recvfrom(long arg0, long arg1, long arg2, long arg3, long arg
 static int _handle_recvmsg(long arg0, long arg1, long arg2, long *result){
   struct tcpls_con *con;
   int sd = (int)arg0;
-  log_debug("TCPLS recvmsg on %d\n", sd);
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+  log_debug("TCPLS recvmsg on %d\n", sd);
   *result = syscall_no_intercept(SYS_recvmsg, arg0, arg1, arg2);
   if(*result >= 0){
     log_debug("TCPLS recvmsg on %d:%d\n", sd, *result);
@@ -128,10 +128,10 @@ static int _handle_recvmsg(long arg0, long arg1, long arg2, long *result){
 static int _handle_sendto(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long *result){
   struct tcpls_con *con;
   int sd = (int)arg0;
-  log_debug("TCPLS sendto on %d\n", sd);
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+  log_debug("TCPLS sendto on %d\n", sd);
   *result = syscall_no_intercept(SYS_sendto, arg0, arg1, arg2, arg3, arg4, arg5);
   if(*result >= 0){
     log_debug("TCPLS sendto on %d:%d\n", sd, *result);
@@ -144,10 +144,10 @@ static int _handle_sendto(long arg0, long arg1, long arg2, long arg3, long arg4,
 static int _handle_sendmsg(long arg0, long arg1, long arg2, long *result){
   struct tcpls_con *con;
   int sd = (int)arg0;
-  log_debug("TCPLS sendmsg on %d\n", sd);
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+  log_debug("TCPLS sendmsg on %d\n", sd);
   *result = syscall_no_intercept(SYS_sendmsg, arg0, arg1, arg2);
   if(*result >= 0){
     log_debug("TCPLS sendmsg on %d:%d\n", sd, *result);

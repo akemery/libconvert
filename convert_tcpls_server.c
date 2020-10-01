@@ -27,6 +27,7 @@ static int _handle_socket(long arg0, long arg1, long arg2, long *result){
     log_debug("-> fd: %d", (int)*result);
     if (*result >= 0){
       /* TCPLS context initializing*/
+      log_debug("init TCPLS context %d %d", *result, arg0);
       _tcpls_init(1);
       /* TCPLS allocating con_info */
       _tcpls_alloc_con_info(*result);
@@ -41,11 +42,10 @@ static int _handle_bind(long arg0, long arg1, long arg2, long *result){
   struct sockaddr *addr = (struct sockaddr *)arg1;
   int sd = (int)arg0;
   struct tcpls_con *con;
-  log_debug("TCPLS binding addr on :%d", sd);
-
   con = _tcpls_lookup(sd);
   if (!con)
     return SYSCALL_RUN;
+  log_debug("TCPLS binding addr on :%d", sd);
   switch (addr->sa_family) {
     case AF_INET:
     case AF_INET6:
@@ -69,10 +69,10 @@ error:
 static int _handle_listen(long arg0, long arg1, long *result){
   int sd = (int)arg0;
   struct tcpls_con *con;
-  log_debug("TCPLS listen on :%d", sd);
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+  log_debug("TCPLS listen on :%d", sd);
   *result = syscall_no_intercept(SYS_listen, arg0, arg1);
   if (*result >= 0) {
     log_debug("TCPLS listen on %d:%d:%d", sd, *result, (int)arg1);
@@ -83,33 +83,40 @@ static int _handle_listen(long arg0, long arg1, long *result){
 }
 
 static int _handle_accept4(long arg0, long arg1, long arg2, long arg3, long *result){
-  int sd = (int)arg0;
+  int sd = (int)arg0, ret;
   struct tcpls_con *con;
-  log_debug("TCPLS accept4 on %d:", sd);
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+  log_debug("TCPLS:1 accept4 on %d:", sd);
   *result = syscall_no_intercept(SYS_accept4, arg0, arg1, arg2, arg3);
   if(*result >= 0){
-    log_debug("TCPLS accept4 on %d:%d", sd, *result);
-    *result = _tcpls_do_tcpls_accept(*result, (struct sockaddr *)arg1);
-    if(*result < 0){
-      log_debug("TCPLS tcpls_accept failed %d", *result);
+    log_debug("TCPLS:2 accept4 on %d:%d", sd, *result);
+    ret = _tcpls_do_tcpls_accept(*result, (struct sockaddr *)arg1);
+    if(ret != 0){
+      log_warn("TCPLS:3 tcpls_accept failed %d", *result);
       return SYSCALL_RUN;
     }
+    log_debug("TCPLS: after accept on %d:%d", sd, *result);
+    ret = _tcpls_handshake(*result);
+    if(ret != 0){
+      log_warn("TCPLS:4 handshake failed %d:%d", sd, *result);
+      return SYSCALL_RUN;
+    }
+    log_debug("TCPLS: after handshake on %d:%d", sd, *result);
     return SYSCALL_SKIP;
   }
-  log_warn("TCPLS accept4 on %d failed with error: %d", sd, *result);
+  log_warn("TCPLS:5 accept4 on %d failed with error: %d", sd, *result);
   return SYSCALL_RUN;
 }
 
 UNUSED static int _handle_accept(long arg0, long arg1, long arg2, long arg3, long *result){
   int sd = (int)arg0;
   struct tcpls_con *con;
-  log_debug("TCPLS accept on %d:", sd);
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+  log_debug("TCPLS accept on %d:", sd);
   *result = syscall_no_intercept(SYS_accept, arg0, arg1, arg2, arg3);
   if(*result >= 0){
     log_debug("TCPLS accept on %d:%d", sd, *result);
@@ -123,11 +130,11 @@ UNUSED static int _handle_accept(long arg0, long arg1, long arg2, long arg3, lon
 static int _handle_read(long arg0, long arg1, long arg2, long *result){
   int sd = (int)arg0;
   struct tcpls_con *con;
-  log_debug("TCPLS read on %d", sd);
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
-#if 1
+  log_debug("TCPLS read on %d", sd);
+#if 0
   *result = _tcpls_handshake(sd);
   if(*result < 0){
     log_debug("handshake failed %d:%d", sd, *result);
@@ -146,10 +153,10 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
 static int _handle_writev(long arg0, long arg1, long arg2, long *result){
   int sd = (int)arg0;
   struct tcpls_con *con;
-  log_debug("TCPLS writev on %d", sd);
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+  log_debug("TCPLS writev on %d", sd);
   *result = syscall_no_intercept(SYS_writev, arg0, arg1, arg2);
   if(*result >= 0){
     log_debug("TCPLS writev on %d:%d", sd, *result);
@@ -163,10 +170,10 @@ static int _handle_writev(long arg0, long arg1, long arg2, long *result){
 UNUSED static int _handle_write(long arg0, long arg1, long arg2, long *result){
   int sd = (int)arg0;
   struct tcpls_con *con;
-  log_debug("TCPLS write on %d", sd);
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+  log_debug("TCPLS write on %d", sd);
   *result = syscall_no_intercept(SYS_write, arg0, arg1, arg2);
   if(*result >= 0){
     log_debug("TCPLS write on %d:%d", sd, *result);

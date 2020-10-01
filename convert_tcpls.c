@@ -1,3 +1,5 @@
+#include <libsyscall_intercept_hook_point.h>
+#include <syscall.h>
 #include <string.h>
 #include <openssl/pem.h>
 #include <openssl/engine.h>
@@ -16,8 +18,8 @@ const char * cert_key = "assets/server.key";
 static ptls_context_t *ctx;
 static tcpls_t *tcpls;
 static struct cli_data cli_data;
-static list_t *tcpls_con_l;
-static list_t *ours_addr_list;
+static list_t *tcpls_con_l = NULL;
+static list_t *ours_addr_list = NULL;
 
 static int handle_mpjoin(int socket, uint8_t *connid, uint8_t *cookie, uint32_t transportid, void *cbdata) ;
 static int handle_connection_event(tcpls_event_t event, int socket, int transportid, void *cbdata) ;
@@ -30,7 +32,9 @@ static int handle_client_stream_event(tcpls_t *tcpls, tcpls_event_t event, strea
 static int handle_connection_event(tcpls_event_t event, int socket, int transportid, void *cbdata) {
   list_t *conntcpls = (list_t*) cbdata;
   struct tcpls_con *con;
-  assert(conntcpls);
+  if(!conntcpls){
+    return 0;
+  }
   switch(event){
     case CONN_OPENED:
       log_debug("CONN OPENED %d:%d:%d\n", socket, event, transportid);
@@ -49,7 +53,6 @@ static int handle_connection_event(tcpls_event_t event, int socket, int transpor
         con = list_get(conntcpls, i);
         if (con->sd == socket) {
           list_remove(conntcpls, con);
-          log_debug("CONN CLOSED REMOVE %d:%d\n",socket, event);
           break;
         }
       }
@@ -77,7 +80,6 @@ static int handle_client_connection_event(tcpls_event_t event, int socket, int t
     case CONN_OPENED:
       log_debug("Received a CONN_OPENED; adding the socket %d\n", socket);
       list_add(data->socklist, &socket);
-      log_debug("Received a CONN_OPENED; adding the socket %d:%p\n", socket, tcpls);
       break;
     default: break;
   }
@@ -168,6 +170,10 @@ static ptls_context_t *set_tcpls_ctx_options(int is_server){
   ctx->key_exchanges = ptls_openssl_key_exchanges;
   ctx->cipher_suites = ptls_openssl_cipher_suites;
   ctx->get_time = &ptls_get_time;
+  if(!tcpls_con_l)
+    tcpls_con_l = new_list(sizeof(struct tcpls_con),2);
+  if(!ours_addr_list)
+    ours_addr_list = new_list(sizeof(struct sockaddr), 2);
   if(!is_server){
     ctx->send_change_cipher_spec = 1;
     list_t *socklist = new_list(sizeof(int), 2);
@@ -241,8 +247,6 @@ int _tcpls_init(int is_server){
     if(!tcpls)
       return -1;
   }
-  tcpls_con_l = new_list(sizeof(struct tcpls_con),2);
-  ours_addr_list = new_list(sizeof(struct sockaddr), 2);
   if(!tcpls_con_l)
     return -1;
   return 0;
@@ -315,8 +319,10 @@ int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
   socklen_t salen = sizeof(struct sockaddr);
   log_debug("TCPLS  tcpls_accept %d:%d\n", sd, addr->sa_family);
   result = _tcpls_alloc_con_info(sd);
-  if(result < 0)
+  if(result < 0){
+    log_warn("failed to alloc con %d", sd);
     return result;
+  }
   tcpls = tcpls_new(ctx, 1);
   if(!tcpls)
     return -1;
@@ -330,7 +336,7 @@ int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
     if(result)
       return result;
   }
-  if (getsockname(sd, (struct sockaddr *) &our_addr, &salen) < 0) {
+  if (syscall_no_intercept(SYS_getsockname, sd, (struct sockaddr *) &our_addr, &salen) < 0) {
     log_debug("getsockname(2) failed %d:%d", errno, sd);
   }
   if(our_addr.sa_family == AF_INET){
@@ -346,7 +352,7 @@ int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
   result = tcpls_accept(tcpls, sd, NULL, 0);
   if(result < 0)
     log_debug("TCPLS tcpls_accept failed %d\n", result);
-  log_debug("TCPLS tcpls_accept %d:%d\n", sd, result);
+  log_debug("TCPLS end tcpls_accept %d:%d\n", sd, result);
   return result;
 }
 
@@ -359,8 +365,9 @@ int _tcpls_set_ours_addr(struct sockaddr *addr){
 
 int _tcpls_handshake(int sd){
   int result = -1;
-  if(ptls_handshake_is_complete(tcpls->tls))
+  if(ptls_handshake_is_complete(tcpls->tls)){
     return 0;
+  }
   struct tcpls_con *con = _tcpls_lookup(sd);
   if(!con)
     return result;

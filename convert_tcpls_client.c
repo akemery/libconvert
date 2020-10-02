@@ -48,8 +48,6 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
   if (!con)
     return SYSCALL_RUN;
     
-  log_debug("Opening TCPLS connexion on sd:%d", sd);
-
   switch (dest->sa_family) {
     case AF_INET:
     case AF_INET6:
@@ -61,6 +59,7 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
 		   dest->sa_family);
       goto error;
   }
+  log_debug("Opening TCPLS connexion on sd:%d", sd);
 
   if (*result >= 0) {
     ret = _tcpls_handshake(sd);
@@ -80,11 +79,13 @@ error:
 static int _handle_read(long arg0, long arg1, long arg2, long *result){
   struct tcpls_con *con;
   int sd = (int)arg0;
+  uint8_t *buf = (uint8_t*)arg1;
+  size_t size = (size_t)arg2;
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
-  log_debug("TCPLS read on %d\n", sd);
-  *result = syscall_no_intercept(SYS_read, arg0, arg1, arg2);
+  //*result = syscall_no_intercept(SYS_read, arg0, arg1, arg2);
+  *result = _tcpls_do_recv(buf, size);
   if(*result >= 0){
     log_debug("TCPLS read on %d:%d\n", sd, *result);
     return SYSCALL_SKIP;
@@ -93,14 +94,17 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
   return SYSCALL_RUN;
 }
 
-static int _handle_recvfrom(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long *result){
+static int _handle_recvfrom(long arg0, long arg1, long arg2,  UNUSED long arg3, UNUSED long arg4,  UNUSED long arg5, long *result){
   struct tcpls_con *con;
   int sd = (int)arg0;
+  uint8_t * buf = (uint8_t *)arg1;
+  size_t size = (size_t)arg2;
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
   log_debug("TCPLS recvfrom on %d\n", sd);
-  *result = syscall_no_intercept(SYS_recvfrom, arg0, arg1, arg2, arg3, arg4, arg5);
+  //*result = syscall_no_intercept(SYS_recvfrom, arg0, arg1, arg2, arg3, arg4, arg5);
+  *result = _tcpls_do_recv(buf, size);
   if(*result >= 0){
     log_debug("TCPLS recvfrom on %d:%d\n", sd, *result);
     return SYSCALL_SKIP;
@@ -157,6 +161,24 @@ static int _handle_sendmsg(long arg0, long arg1, long arg2, long *result){
   return SYSCALL_RUN;
 }
 
+static int _handle_write(long arg0, long arg1, long arg2, long *result){
+  int sd = (int)arg0;
+  size_t size = (size_t)arg2; 
+  char * buff = (char *) arg1;
+  struct tcpls_con *con;
+  con = _tcpls_lookup(sd);
+  if(!con)
+    return SYSCALL_RUN;
+  //*result = syscall_no_intercept(SYS_write, arg0, arg1, arg2);
+  *result = _tcpls_do_send(buff, size);
+  if(*result >= 0){
+    log_debug("TCPLS write on %d:%d:%s", sd, *result, buff);
+    return SYSCALL_SKIP;
+  }
+  log_warn("TCPLS write on %d failed with error: %d", sd, *result);
+  return SYSCALL_RUN;
+}
+
 static int _handle_close(long arg0, long *result){
   int sd = (int)arg0;
   if(_tcpls_free_con(sd)){
@@ -199,6 +221,8 @@ _hook(long syscall_number, long arg0, long arg1, long arg2, long UNUSED arg3,
       return _handle_sendto(arg0, arg1, arg2, arg3, arg4, arg5, result);
     case SYS_sendmsg:
       return _handle_sendmsg(arg0, arg1, arg2, result);
+    case SYS_write:
+      return _handle_write(arg0, arg1, arg2, result);
     default:
       /* The default behavior is to run the default syscall. */
       return SYSCALL_RUN;

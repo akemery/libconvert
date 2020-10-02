@@ -373,3 +373,32 @@ int _tcpls_handshake(int sd){
     return result;
   return  tcpls_do_handshake(sd); 
 }
+
+size_t _tcpls_do_recv(uint8_t *buf, size_t size){
+  int n;
+  ptls_buffer_t tcpls_buf;
+  ptls_buffer_init(&tcpls_buf, "", 0);
+  while((n = tcpls_receive(tcpls->tls, &tcpls_buf, 26276, NULL))==TCPLS_HOLD_DATA_TO_READ)
+     ;
+  n = tcpls_buf.off;
+  memcpy(buf, tcpls_buf.base, n);
+  log_debug("do_recv %d:%d:%d:%s:%s:", n, tcpls_buf.off, size, tcpls_buf.base, buf);
+  ptls_buffer_dispose(&tcpls_buf);
+  return n;
+}
+
+size_t _tcpls_do_send(char *buf, size_t size){
+  size_t n;
+  int streamid;
+  if(!size)
+    return size;
+  if(tcpls->streams->size == 0)
+    streamid = 0;
+  else if((tcpls->streams->size == 1) && (tcpls->next_stream_id == 2147483649))
+    streamid = tcpls->streams->size;
+    else
+       streamid = 2147483649;
+  n = tcpls_send(tcpls->tls, streamid, buf, size);
+  log_debug("do_send %d:%d:%s", n, size, buf);
+  return n;
+}

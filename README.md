@@ -1,6 +1,6 @@
-# libconvert [![Build Status](https://travis-ci.com/Tessares/libconvert.svg?branch=master)](https://travis-ci.com/Tessares/libconvert)
+# TCPLS libconvert 
 
-Libraries to work with 0-RTT TCP Convert Protocol ([RFC 8803](https://datatracker.ietf.org/doc/draft-ietf-tcpm-converters)).
+Libraries to work transform TCP client and TCP server to TCPLS client and TCPLS server. ((https://github.com/pluginized-protocols/picotcpls.git)).
 * `libconvert_util`: A library to parse and write Convert messages.
 * `libconvert_client`: An `LD_PRELOAD` library that turns an existing client, using TCP sockets, into a Convert client.
 

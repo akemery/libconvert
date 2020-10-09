@@ -1,16 +1,11 @@
 # TCPLS libconvert 
 
-Libraries to work transform TCP client and TCP server to TCPLS client and TCPLS server. ((https://github.com/pluginized-protocols/picotcpls.git)).
-* `libconvert_util`: A library to parse and write Convert messages.
-* `libconvert_client`: An `LD_PRELOAD` library that turns an existing client, using TCP sockets, into a Convert client.
+Libraries to transform TCP client and TCP server to TCPLS client and TCPLS server. ((https://github.com/pluginized-protocols/picotcpls.git)).
+* `libconvert_tcpls`: A library to call TCPLS API functions.
+* `libconvert_tcpls_client`: An `LD_PRELOAD` library that turns an existing client, using TCP sockets, into a TCPLS client.
+* `libconvert_tcpls_server`: An `LD_PRELOAD` library that turns an existing server, using TCP sockets, into a TCPLS server.
 
-This is work in progress. The `libconvert_util` library currently only supports the Connect TLV and the Error TLV. This repository does not yet include a server-side Transport Converter.
-
-Future work:
-* Sample server-side Transport Converter
-* Support Extended TCP Header TLV and Converter bypass.
-* Support Info TLV and the Supported TCP Extensions TLV.
-* Support Cookie TLV.
+This is work in progress. The `libconvert_tcpls_client` library currently only supports `wget` and The `libconvert_tcpls_server` library currently only supports `apache2`. 
 
 ### Requirements
 

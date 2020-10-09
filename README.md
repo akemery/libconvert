@@ -9,21 +9,33 @@ This is work in progress. The `libconvert_tcpls_client` library currently only s
 
 ### Requirements
 
-* Requires Linux >= 4.5 (leverages the TCP Fast Open infrastructure).
-* Configure `$ sysctl -w net.ipv4.tcp_fastopen=5` to enable sending data in the opening SYN, regardless of cookie availability.
+* Requires Linux >= 4.5.
+
 
 ### Build
 
 Fetch the Git submodules:
 ```
 $ git submodule init && git submodule update
+$ cd lib/picotcpls
+$ git submodule init && git submodule update
+$ git pull https://github.com/frochet/picotcpls.git tcpls/ldpreload
 ```
+
+###  Softwares
+
+* Download the following softwares needed to install wget, apache2 and libssl-dev on the provided Dockerfile
+
+
 
 The easiest way to build both libraries and run the tests is with the provided Dockerfile (which contains all deps):
 ```
-$ docker build -t tessares.net/libconvert .
-$ docker run --cap-add=NET_ADMIN --sysctl net.ipv4.tcp_fastopen=5 -v $PWD:/lc -t tessares.net/libconvert /bin/bash -c "mkdir -p /lc/build && cd /lc/build && cmake .. && make && make test"
+$ docker build -t uac.bj/libconvert .
+$ docker run  -v $PWD:/lc -it uac.bj/libconvert"
+$ cd lc
+$ mkdir build && cmake .. && make
 ```
+
 
 Otherwise, assuming all deps are installed, build and run the tests with CMake as follows:
 ```

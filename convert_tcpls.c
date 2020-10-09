@@ -15,6 +15,15 @@
 const char * cert = "assets/server.crt";
 const char * cert_key = "assets/server.key";
 
+static int read_offset = 0;
+static int recvfrom_offset = 0;
+static size_t header_buff_offset = 0;
+static size_t recv_buff_offset = 0;
+static size_t tmp_buff_size = 0;
+
+char tcpls_header_buff[RECV_BUFF_SIZE];
+char tcpls_recv_buff[RECV_BUFF_SIZE];
+
 static ptls_context_t *ctx;
 static tcpls_t *tcpls;
 static struct cli_data cli_data;
@@ -37,7 +46,7 @@ static int handle_connection_event(tcpls_event_t event, int socket, int transpor
   }
   switch(event){
     case CONN_OPENED:
-      log_debug("CONN OPENED %d:%d:%d\n", socket, event, transportid);
+      log_debug("connection_event_call_back: CONNECTION OPENED %d", socket);
       for (int i = 0; i < conntcpls->size; i++) {
         con = list_get(conntcpls, i);
         if (con->sd == socket) {
@@ -48,7 +57,7 @@ static int handle_connection_event(tcpls_event_t event, int socket, int transpor
       }     
       break;
     case CONN_CLOSED:
-      log_debug("CONN CLOSED %d:%d\n",socket, event);
+      log_debug("connection_event_call_back: CONNECTION CLOSED %d",socket);
       for (int i = 0; i < conntcpls->size; i++) {
         con = list_get(conntcpls, i);
         if (con->sd == socket) {
@@ -65,20 +74,13 @@ static int handle_connection_event(tcpls_event_t event, int socket, int transpor
 
 static int handle_client_connection_event(tcpls_event_t event, int socket, int transportid, void *cbdata) {
   struct cli_data *data = (struct cli_data*) cbdata;
-  connect_info_t *con = NULL;
-  for(int i = 0; i < tcpls->connect_infos->size; i++){
-    con = list_get(tcpls->connect_infos, i);
-    if(con->socket == socket){
-      break;
-    }
-  }
   switch (event) {
     case CONN_CLOSED:
-      log_debug("Received a CONN_CLOSED; removing the socket (%d) (%d) \n", socket, transportid);
+      log_debug("connection_event_call_back: Received a CONN_CLOSED; removing the socket %d transportid %d", socket, transportid);
       list_remove(data->socklist, &socket); 
       break;
     case CONN_OPENED:
-      log_debug("Received a CONN_OPENED; adding the socket %d\n", socket);
+      log_debug("connection_event_call_back: Received a CONN_OPENED; adding the socket descriptor %d transport id %d", socket, transportid);
       list_add(data->socklist, &socket);
       break;
     default: break;
@@ -91,11 +93,11 @@ static int handle_client_stream_event(tcpls_t *tcpls, tcpls_event_t event, strea
   struct cli_data *data = (struct cli_data*) cbdata;
   switch (event) {
     case STREAM_OPENED:
-      log_debug("Handling stream_opened callback %p:%d\n", tcpls, transportid);
+      log_debug("stream_event_call_back: Handling stream_opened callback transportid :%d:%p", transportid, tcpls);
       list_add(data->streamlist, &streamid);
       break;
     case STREAM_CLOSED:
-      log_debug("Handling stream_closed callback %p:%d\n", tcpls, transportid);
+      log_debug("stream_event_call_back: Handling stream_closed callback %d:%p", transportid, tcpls);
       list_remove(data->streamlist, &streamid);
       break;
     default: break;
@@ -110,11 +112,10 @@ static int handle_stream_event(tcpls_t *tcpls, tcpls_event_t event,
   assert(conntcpls);
   switch(event){
     case STREAM_OPENED:
-      log_debug("STREAM OPENED %d %d %d (%d)\n", streamid, event, transportid, tcpls->streams->size);
+      log_debug("stream_event_call_back: STREAM OPENED streamid :%d transportid :%d", streamid, transportid);
       for (int i = 0; i < conntcpls->size; i++) {
         con = list_get(conntcpls, i);
         if (con->tcpls == tcpls && con->transportid == transportid) {
-          log_debug("Setting streamid %u as wants to write %d %d\n", streamid, transportid, con->sd);
           con->streamid = streamid;
           con->is_primary = 1;
           con->wants_to_write = 1;
@@ -122,7 +123,7 @@ static int handle_stream_event(tcpls_t *tcpls, tcpls_event_t event,
       }
       break;
     case STREAM_CLOSED:
-      log_debug("STREAM CLOSED %d %d %d\n", streamid, event, transportid);
+      log_debug("stream_event_call_back: STREAM CLOSED streamid :%d transportid :%d", streamid, transportid);
       for (int i = 0; i < conntcpls->size; i++) {
         con = list_get(conntcpls, i);
         if ( con->tcpls == tcpls && con->transportid == transportid) {
@@ -229,18 +230,17 @@ static int tcpls_do_handshake(int sd){
   memset(&prop, 0, sizeof(prop));
   prop.socket = sd;
   prop.received_mpjoin_to_process = &handle_mpjoin;
-  log_debug("1: tcpls_handshake %d", resultat);
   if ((resultat = tcpls_handshake(tcpls->tls, &prop)) != 0) {
     if (resultat == PTLS_ERROR_HANDSHAKE_IS_MPJOIN) 
       return resultat;
     log_warn("tcpls_handshake failed with ret (%d)\n", resultat);
   }
-  log_debug("2: tcpls_handshake %d", resultat);
   return resultat;
 }
 
 int _tcpls_init(int is_server){
-  log_debug("Initialization of tcpls %d\n", is_server);
+  const char *host = is_server ? "SERVER" : "CLIENT";
+  log_debug("Init new tcpls context for %s", host);
   set_tcpls_ctx_options(is_server);
   if(!is_server){
     tcpls = tcpls_new(ctx, is_server);
@@ -259,7 +259,7 @@ int _tcpls_alloc_con_info(int sd){
   con->sd = sd;
   con->state = CLOSED;
   list_add(tcpls_con_l, con); 
-  log_debug("adding new socket %d:%d\n",sd, tcpls_con_l->size);
+  log_debug("adding new socket descriptor :%d",sd);
   return tcpls_con_l->size;
 }
 
@@ -285,7 +285,6 @@ int _tcpls_free_con(int sd){
     con = list_get(tcpls_con_l, i);
     if(con->sd == sd){
       list_remove(tcpls_con_l, con);
-      log_debug("Connexion %d closed removing socket on list with size %d\n", sd, tcpls_con_l->size);
       return 0;
     }
   }
@@ -309,7 +308,6 @@ int _handle_tcpls_connect(int sd, struct sockaddr * dest){
       return result;
   }
   result = tcpls_connect(tcpls->tls, NULL, dest, &timeout, sd);
-  log_debug("TCPLS tcpls_connect %d\n", result);
   return result;
 }
 
@@ -317,7 +315,6 @@ int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
   int result = -1;
   struct sockaddr our_addr;
   socklen_t salen = sizeof(struct sockaddr);
-  log_debug("TCPLS  tcpls_accept %d:%d\n", sd, addr->sa_family);
   result = _tcpls_alloc_con_info(sd);
   if(result < 0){
     log_warn("failed to alloc con %d", sd);
@@ -352,7 +349,6 @@ int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
   result = tcpls_accept(tcpls, sd, NULL, 0);
   if(result < 0)
     log_debug("TCPLS tcpls_accept failed %d\n", result);
-  log_debug("TCPLS end tcpls_accept %d:%d\n", sd, result);
   return result;
 }
 
@@ -374,20 +370,109 @@ int _tcpls_handshake(int sd){
   return  tcpls_do_handshake(sd); 
 }
 
-size_t _tcpls_do_recv(uint8_t *buf, size_t size){
-  int n;
+static size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size){
+  size_t n = 0;
+  int ret = 0;
+  struct timeval timeout = {.tv_sec = 2, .tv_usec = 0};
   ptls_buffer_t tcpls_buf;
   ptls_buffer_init(&tcpls_buf, "", 0);
-  while((n = tcpls_receive(tcpls->tls, &tcpls_buf, 26276, NULL))==TCPLS_HOLD_DATA_TO_READ)
-     ;
-  n = tcpls_buf.off;
-  memcpy(buf, tcpls_buf.base, n);
-  log_debug("do_recv %d:%d:%d:%s:%s:", n, tcpls_buf.off, size, tcpls_buf.base, buf);
+  if(tmp_buff_size){
+    if(tmp_buff_size <= size){
+      memcpy(buf, tcpls_recv_buff + recv_buff_offset, tmp_buff_size);
+      n = tmp_buff_size;
+      tmp_buff_size = 0;
+      recv_buff_offset = 0;
+      log_debug("received mores data (%d bytes) than expected (%d bytes) we sent %d bytes, it remains %d bytes", tmp_buff_size + n, size, n,  tmp_buff_size);
+    }
+    else{
+      memcpy(buf, tcpls_recv_buff + recv_buff_offset, size);
+      n = size;
+      tmp_buff_size -= size;
+      recv_buff_offset += size;
+      log_debug("received mores data (%d bytes) than expected (%d bytes) we sent %d bytes, it remains %d bytes", tmp_buff_size + n, size, n,  tmp_buff_size);
+    }
+  }
+  else{
+    do{
+      while((ret = tcpls_receive(tcpls->tls, &tcpls_buf, 26276, &timeout))==TCPLS_HOLD_DATA_TO_READ)
+         ;
+      memset(buf,0,size);
+      n = tcpls_buf.off;
+    } while(!n && !ret);
+    if(n>0){
+      if(n <= size){
+        memcpy(buf, tcpls_buf.base+4, n-4);
+        n = n - 8;
+        tmp_buff_size = 0;
+      }else{
+        log_debug("4: do_recv high than expected %d:%d:%d::", n, sd, size);
+        recv_buff_offset = 0;
+        memcpy(tcpls_recv_buff, tcpls_buf.base+4, n-4);
+        tmp_buff_size = n - 8;
+        memcpy(buf, tcpls_recv_buff + recv_buff_offset, size);
+        recv_buff_offset +=size;
+        tmp_buff_size -= size;
+        n = size;
+      }
+    }
+    else{
+      log_debug("TCPLS tcpls_receive return error %d code on socket descriptor %d", ret, sd);
+      n = ret;
+    }
+  }
   ptls_buffer_dispose(&tcpls_buf);
   return n;
 }
 
-size_t _tcpls_do_send(char *buf, size_t size){
+size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, int is_client){
+  int n;
+  if(header_buff_offset && is_client){
+    log_debug("tcpls_do_rcvfrom : copy %d bytes from recv buffer to application that expect %d bytes", header_buff_offset, size);
+    memcpy(buf, tcpls_header_buff, header_buff_offset);
+    n = header_buff_offset;
+    header_buff_offset = 0;
+  } else{
+    n = _tcpls_do_recv(sd, buf, size);
+    if(n > 0){
+      recvfrom_offset += n;
+      //for(int i = 0; i < n; i++)
+        //log_debug("recvfrom %x",*(buf+i));
+      memcpy(tcpls_header_buff+header_buff_offset, buf, n);
+      header_buff_offset+=n;
+    }
+    else{
+      log_debug("Recvfrom --> recv_offset:read_offset:recvfrom_offset %d:%d:%d", header_buff_offset, read_offset, recvfrom_offset);
+    }
+  }
+  return n;
+}
+
+size_t _tcpls_do_read(int sd, uint8_t *buf, size_t size, int is_client){
+  int n;
+  if(header_buff_offset && is_client && (size == header_buff_offset)){
+    log_debug("tcpls_do_read : copy %d bytes from recv buffer to application that expect %d bytes", header_buff_offset, size);
+    memcpy(buf, tcpls_header_buff, header_buff_offset);
+    n = header_buff_offset;
+    header_buff_offset = 0;
+  }
+  else{
+    n = _tcpls_do_recv(sd, buf, size);
+    if(header_buff_offset)
+      header_buff_offset = 0;
+    if(n > 0){
+      read_offset += n;
+      //for(int i = 0; i < n; i++)
+        //log_debug("read %x",*(buf+i));
+    }
+    else{
+      log_debug("TCPLS tcpls_do_read return error code %d on socket descriptor %d", n, sd);
+    }
+  }
+  return n;
+}
+
+
+size_t _tcpls_do_send(uint8_t *buf, size_t size){
   size_t n;
   int streamid;
   if(!size)
@@ -399,6 +484,7 @@ size_t _tcpls_do_send(char *buf, size_t size){
     else
        streamid = 2147483649;
   n = tcpls_send(tcpls->tls, streamid, buf, size);
-  log_debug("do_send %d:%d:%s", n, size, buf);
+  //for(int i = 0; i < n; i++)
+    //log_debug("%x",*(buf+i));
   return n;
 }

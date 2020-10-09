@@ -4,9 +4,9 @@
 #include <pthread.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <syscall.h>
+#include <arpa/inet.h>
 
 #include <picotls.h>
 #include <picotcpls.h>
@@ -21,13 +21,9 @@ static pthread_mutex_t	_log_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int _handle_socket(long arg0, long arg1, long arg2, long *result){
   /* Only consider TCP-based sockets. */
   if (((arg0 == AF_INET) || (arg0 == AF_INET6)) && (arg1 == SOCK_STREAM)) {
-    log_debug("handle socket(%ld, %ld, %ld)", arg0, arg1, arg2);
     *result = syscall_no_intercept(SYS_socket, arg0, arg1, arg2);
-    log_debug("-> fd: %d", (int)*result);
-    
     if (*result >= 0){
       /* TCPLS context initializing */
-      log_debug("init TCPLS context %d %d", *result, arg0);
       _tcpls_init(0);
       /* TCPLS allocating con_info */
       _tcpls_alloc_con_info(*result);
@@ -59,15 +55,14 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
 		   dest->sa_family);
       goto error;
   }
-  log_debug("Opening TCPLS connexion on sd:%d", sd);
-
+ 
   if (*result >= 0) {
     ret = _tcpls_handshake(sd);
     if(ret < 0){
       log_warn("handshake failed %d:%d", sd, *result);
       return SYSCALL_RUN;
     }
-    log_debug("TCPLS connexion opened on %d:%d", sd, *result);
+    log_debug("TCPLS: Open connexion on %d handshake OK", sd);
     return SYSCALL_SKIP;
   }
 
@@ -85,16 +80,16 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
   if(!con)
     return SYSCALL_RUN;
   //*result = syscall_no_intercept(SYS_read, arg0, arg1, arg2);
-  *result = _tcpls_do_recv(buf, size);
+  *result = _tcpls_do_read(sd,buf, size, 1);
   if(*result >= 0){
-    log_debug("TCPLS read on %d:%d\n", sd, *result);
+    log_debug("TCPLS read on socket descriptor %d, %d bytes read", sd, *result);
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS read %d failed with error: %d", sd, *result);
   return SYSCALL_RUN;
 }
 
-static int _handle_recvfrom(long arg0, long arg1, long arg2,  UNUSED long arg3, UNUSED long arg4,  UNUSED long arg5, long *result){
+static int _handle_recvfrom(long arg0, long arg1, long arg2,   UNUSED long arg3,  UNUSED long arg4, UNUSED  long arg5, long *result){
   struct tcpls_con *con;
   int sd = (int)arg0;
   uint8_t * buf = (uint8_t *)arg1;
@@ -102,11 +97,10 @@ static int _handle_recvfrom(long arg0, long arg1, long arg2,  UNUSED long arg3, 
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
-  log_debug("TCPLS recvfrom on %d\n", sd);
   //*result = syscall_no_intercept(SYS_recvfrom, arg0, arg1, arg2, arg3, arg4, arg5);
-  *result = _tcpls_do_recv(buf, size);
+  *result = _tcpls_do_recvfrom(sd,buf, size, 1);
   if(*result >= 0){
-    log_debug("TCPLS recvfrom on %d:%d\n", sd, *result);
+    log_debug("TCPLS recvfrom on socket %d, %d bytes received", sd, *result);
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS recvfrom %d failed with error: %d", sd, *result);
@@ -164,7 +158,7 @@ static int _handle_sendmsg(long arg0, long arg1, long arg2, long *result){
 static int _handle_write(long arg0, long arg1, long arg2, long *result){
   int sd = (int)arg0;
   size_t size = (size_t)arg2; 
-  char * buff = (char *) arg1;
+  uint8_t * buff = (uint8_t *) arg1;
   struct tcpls_con *con;
   con = _tcpls_lookup(sd);
   if(!con)
@@ -172,7 +166,7 @@ static int _handle_write(long arg0, long arg1, long arg2, long *result){
   //*result = syscall_no_intercept(SYS_write, arg0, arg1, arg2);
   *result = _tcpls_do_send(buff, size);
   if(*result >= 0){
-    log_debug("TCPLS write on %d:%d:%s", sd, *result, buff);
+    log_debug("TCPLS write on socket descriptor %d, %d bytes written", sd, *result);
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS write on %d failed with error: %d", sd, *result);
@@ -187,10 +181,10 @@ static int _handle_close(long arg0, long *result){
   }
   *result = syscall_no_intercept(SYS_close, arg0);
   if(*result >= 0){
-    log_debug("connexion closed %d:%d\n", sd, *result);
+    log_debug("connexion closed %d:%d", sd, *result);
     return SYSCALL_SKIP;
   }
-  log_debug("connexion closed %d:%d failed\n", sd, *result);
+  log_debug("connexion closed %d:%d failed", sd, *result);
   return SYSCALL_RUN;
 }
 

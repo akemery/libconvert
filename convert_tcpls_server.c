@@ -4,10 +4,12 @@
 #include <pthread.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <sys/uio.h>
 #include <syscall.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <arpa/inet.h>
 
 #include <picotls.h>
 #include <picotcpls.h>
@@ -20,15 +22,10 @@ static FILE *		_log;
 static pthread_mutex_t	_log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int _handle_socket(long arg0, long arg1, long arg2, long *result){
-  log_debug("handle start socket(%ld, %ld, %ld):%d:%d:%d:%d", arg0, arg1, arg2, SOCK_STREAM, AF_INET, AF_INET6, SOCK_STREAM&arg1);
-  /* Only consider TCP-based sockets. */
   if (((arg0 == AF_INET) || (arg0 == AF_INET6)) && (arg1 & SOCK_STREAM)) {
-    log_debug("handle socket(%ld, %ld, %ld)", arg0, arg1, arg2);
     *result = syscall_no_intercept(SYS_socket, arg0, arg1, arg2);
-    log_debug("-> fd: %d", (int)*result);
     if (*result >= 0){
       /* TCPLS context initializing*/
-      log_debug("init TCPLS context %d %d", *result, arg0);
       _tcpls_init(1);
       /* TCPLS allocating con_info */
       _tcpls_alloc_con_info(*result);
@@ -46,7 +43,6 @@ static int _handle_bind(long arg0, long arg1, long arg2, long *result){
   con = _tcpls_lookup(sd);
   if (!con)
     return SYSCALL_RUN;
-  log_debug("TCPLS binding addr on :%d", sd);
   switch (addr->sa_family) {
     case AF_INET:
     case AF_INET6:
@@ -59,7 +55,9 @@ static int _handle_bind(long arg0, long arg1, long arg2, long *result){
       goto error;
   }
   if (*result >= 0) {
-    log_debug("TCPLS binding on %d:%d", sd, *result);
+    char buf[INET_ADDRSTRLEN +1];
+    inet_ntop(addr->sa_family, addr, buf, sizeof(buf));          
+    log_debug("TCPLS bind on socket descriptor :%d on addr :%s", sd, buf);
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS binding on %d failed with error: %d", sd, *result);
@@ -73,10 +71,9 @@ static int _handle_listen(long arg0, long arg1, long *result){
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
-  log_debug("TCPLS listen on :%d", sd);
   *result = syscall_no_intercept(SYS_listen, arg0, arg1);
   if (*result >= 0) {
-    log_debug("TCPLS listen on %d:%d:%d", sd, *result, (int)arg1);
+    log_debug("TCPLS listen on socket descriptor :%d backlog :%d", sd, (int)arg1);
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS listen on %d failed with error: %d", sd, *result);
@@ -91,7 +88,6 @@ static int _handle_accept4(long arg0, long arg1, long arg2, long arg3, long *res
     return SYSCALL_RUN;
   *result = syscall_no_intercept(SYS_accept4, arg0, arg1, arg2, arg3);
   if(*result >= 0){
-    log_debug("TCPLS: accept4 on %d:%d", sd, *result);
     ret = _tcpls_do_tcpls_accept(*result, (struct sockaddr *)arg1);
     if(ret != 0){
       return SYSCALL_RUN;
@@ -100,10 +96,10 @@ static int _handle_accept4(long arg0, long arg1, long arg2, long arg3, long *res
     if(ret != 0){
       return SYSCALL_RUN;
     }
-    log_debug("TCPLS: after handshake on %d:%d", sd, *result);
+    log_debug("TCPLS: accepting new connection %d on %d handshake OK", sd, *result);
     return SYSCALL_SKIP;
   }
-  log_warn("TCPLS:5 accept4 on %d failed with error: %d", sd, *result);
+  log_warn("TCPLS accept on %d failed with error: %d", sd, *result);
   return SYSCALL_RUN;
 }
 
@@ -132,11 +128,10 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
-  log_debug("TCPLS read on %d", sd);
   //*result = syscall_no_intercept(SYS_read, arg0, arg1, arg2);
-  *result = _tcpls_do_recv(buf, size);
+  *result = _tcpls_do_read(sd, buf, size, 0);
   if(*result >= 0){
-    log_debug("TCPLS read on %d:%d ::: %s", sd, *result, buf);
+    log_debug("TCPLS read on socket descriptor :%d received :%d bytes", sd, *result);
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS read on %d failed with error: %d", sd, *result);
@@ -150,22 +145,21 @@ static int _handle_writev(long arg0, long arg1, long arg2, long *result){
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
-  log_debug("TCPLS writev on %d", sd);
+  log_debug("TCPLS start writev on socket descriptor:%d", sd);
   //*result = syscall_no_intercept(SYS_writev, arg0, arg1, arg2);
   struct iovec* iov = (struct iovec*)arg1;
+  *result = 0;
   for(i = 0; i < n; i++){
-    //struct iovec *iov = (struct iovec*)(iov+i);
     size_t iov_len = (size_t)iov[i].iov_len;
-    char *iov_base = (char*)iov[i].iov_base;
+    uint8_t *iov_base = (uint8_t*)iov[i].iov_base;
     if(iov_len > 0){
-      log_debug("base:%x len:%d n:%d i:%d",iov_base, iov_len,n, i);
       *result += _tcpls_do_send(iov_base, iov_len);
-      log_debug("calling tcpls_send base:%x len:%d n:%d i:%d resu:%d",iov_base, iov_len,n, i, *result);
+      log_debug("called tcpls_send on buffer:%x data_sent:%d bytes data_already_sent:%d bytes iovec_count:%d iter_counter:%d",iov_base, iov_len, *result, n, i);
     }
   }
   
   if(*result >= 0){
-    log_debug("TCPLS writev on %d:%d", sd, *result);
+    log_debug("TCPLS end writev on socket descriptor:%d", sd);
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS writev on %d failed with error: %d", sd, *result);
@@ -175,7 +169,7 @@ static int _handle_writev(long arg0, long arg1, long arg2, long *result){
 
 static int _handle_write(long arg0, long arg1, long arg2, long *result){
   int sd = (int)arg0;
-  char * buf = (char*)arg1;
+  uint8_t * buf = (uint8_t*)arg1;
   size_t size = (size_t) arg2;
   struct tcpls_con *con;
   con = _tcpls_lookup(sd);
@@ -198,7 +192,7 @@ static int _handle_close(long arg0, long *result){
       return SYSCALL_RUN;
   *result = syscall_no_intercept(SYS_close, arg0);
   if(*result >= 0){
-    log_debug("connexion closed %d:%d\n", sd, *result);
+    log_debug("connexion closed removed socket descriptor :%d", sd);
     return SYSCALL_SKIP;
   }
   log_debug("connexion closed %d:%d failed\n", sd, *result);
@@ -210,6 +204,19 @@ static void _log_lock(UNUSED void *udata, int lock){
     pthread_mutex_lock(&_log_mutex);
   else
     pthread_mutex_unlock(&_log_mutex);
+}
+
+static int _handle_shutdown(long arg0, long arg1, long *result){
+  int sd = (int)arg0;
+  struct tcpls_con *con;
+  con = _tcpls_lookup(sd);
+  if(!con)
+    return SYSCALL_RUN;
+  log_debug("shuting down %d", sd);
+  *result = syscall_no_intercept(SYS_shutdown, arg0, arg1);
+  if(*result > 0)
+    return SYSCALL_SKIP;
+  return SYSCALL_RUN;
 }
 
 static int
@@ -239,6 +246,8 @@ _hook(long syscall_number, long arg0, long arg1,  long arg2, long  arg3,
 #endif
     case SYS_close:
       return _handle_close(arg0, result);
+    case SYS_shutdown:
+      return _handle_shutdown(arg0, arg1, result);
     default:
       /* The default behavior is to run the default syscall. */
       return SYSCALL_RUN;
@@ -259,14 +268,7 @@ static __attribute__((constructor)) void init(void) {
     log_set_fp(_log);
   }
   log_info("Starting interception");
-#if 0
-  if (_validate_config(err_buf, sizeof(err_buf)) < 0)
-    log_error("Unable to setup connection interception: %s.",
-		          err_buf);
-  else
-  /* Set up the callback function */
-#endif
-    intercept_hook_point = _hook;
+  intercept_hook_point = _hook;
 }
 
 static __attribute__((destructor)) void fini(void){

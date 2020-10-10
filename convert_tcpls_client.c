@@ -16,7 +16,6 @@
 #include "convert_tcpls.h"
 
 static FILE *		_log;
-static pthread_mutex_t	_log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int _handle_socket(long arg0, long arg1, long arg2, long *result){
   /* Only consider TCP-based sockets. */
@@ -188,12 +187,6 @@ static int _handle_close(long arg0, long *result){
   return SYSCALL_RUN;
 }
 
-UNUSED static void _log_lock(UNUSED void *udata, int lock){
-  if (lock)
-    pthread_mutex_lock(&_log_mutex);
-  else
-    pthread_mutex_unlock(&_log_mutex);
-}
 
 static int
 _hook(long syscall_number, long arg0, long arg1, long arg2, long UNUSED arg3,
@@ -226,22 +219,15 @@ static __attribute__((constructor)) void init(void) {
   UNUSED char err_buf[1024];
   const char *	log_path = getenv("CONVERT_LOG");
   log_set_quiet(1);
-  //log_set_lock(_log_lock);
   /* open the log iff specified */
   if (log_path) {
     _log = fopen(log_path, "w");
     if (!_log)
       fprintf(stderr, "convert: unable to open log %s: %s",
 			        log_path, strerror(errno));
-    log_set_fp(_log);
+    log_add_fp(_log, LOG_FATAL);
   }
   log_info("Starting interception");
-#if 0  
-  if (_validate_config(err_buf, sizeof(err_buf)) < 0)
-    log_error("Unable to setup connection interception: %s.",
-		          err_buf);
-  else
-#endif
   /* Set up the callback function */
     intercept_hook_point = _hook;
 }

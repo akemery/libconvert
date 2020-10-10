@@ -17,9 +17,6 @@ include_directories(lib/picotcpls/include)
 # libconvert_util
 add_library(convert_util SHARED convert_util.c)
 
-# libconvert_client
-add_library(convert_client SHARED convert_client.c lib/log.c/src/log.c)
-target_link_libraries(convert_client PRIVATE syscall_intercept_static convert_util)
 
 # libconvert_tcpls
 add_library(convert_tcpls SHARED convert_tcpls.c lib/log.c/src/log.c)
@@ -39,7 +36,7 @@ add_subdirectory(tests)
 # Tests for code linting & formatting
 enable_testing()
 
-list(APPEND LIBCONVERT_SOURCES convert_client.c convert_tcpls_client.c  convert_tcpls_server.c convert_tcpls.c convert.h convert_util.c convert_util.h)
+list(APPEND LIBCONVERT_SOURCES  convert_tcpls_client.c  convert_tcpls_server.c convert_tcpls.c convert_tcpls.h convert.h convert_util.c convert_util.h)
 
 add_test(NAME uncrustify
          COMMAND uncrustify -c uncrustify.cfg --check -l C ${LIBCONVERT_SOURCES}

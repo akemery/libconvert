@@ -19,8 +19,8 @@ Fetch the Git submodules:
 $ cd tcplslibconvert
 $ git submodule init && git submodule update
 $ cd lib/picotcpls
-$ git submodule init && git submodule update
 $ git pull https://github.com/frochet/picotcpls.git tcpls/ldpreload
+$ git submodule init && git submodule update
 ```
 
 ###  Softwares
@@ -39,21 +39,17 @@ $ git pull https://github.com/frochet/picotcpls.git tcpls/ldpreload
 
 The easiest way to build both libraries and run the tests is with the provided Dockerfile (which contains all deps):
 ```
-$ docker build -t uac.bj/libconvert .
-$ docker run  -v $PWD:/lc -it uac.bj/libconvert"
+$ cd tcplslibconvert
+$ sudo docker build -t uac.bj/libconvert .
+$ sudo docker run  -v $PWD:/lc -it uac.bj/libconvert
 $ cd lc
-$ mkdir build && cmake .. && make
+$ bash install_lib.sh
+$ mkdir build && cd build && cmake .. && make
 ```
 
 You need a client and a server so you have to run two docker instances. 
-Let's consider as the server the first instance  
 
-Otherwise, assuming all deps are installed, build and run the tests with CMake as follows:
-```
-$ mkdir -p build && cd build && cmake .. && make && make test
-```
-
-### Usage & dependencies of `libconvert_client`
+### Usage & dependencies of `libconvert_tcpls_server` and `libconvert_tcpls_client`
 
 #### Runtime dependencies
 
@@ -61,34 +57,37 @@ $ mkdir -p build && cd build && cmake .. && make && make test
 
 #### Usage
 
-To use the `libconvert_client` lib (assuming a Transport Converter listening at 192.0.2.1:1234):
+To use the `libconvert_server`  and `libconvert_client` libs:
+Run the following command in two different terminal to have two docker instances.
 ```
-$ CONVERT_LOG=/tmp/converter.log CONVERT_ADDR=192.0.2.1 CONVERT_PORT=1234 LD_LIBRARY_PATH=$PWD/build LD_PRELOAD=libconvert_client.so curl https://www.tessares.net
+$ cd tcplslibconvert 
+$ sudo docker run  -v $PWD:/lc -it uac.bj/libconvert
+```
+Assuming the server has the address 172.17.0.2 and the client has the address 172.17.0.3
+
+Client side:
+```
+# cd lc/build
+# CONVERT_LOG=./client_converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_client.so wget http://172.17.0.2
+```
+Server side: 
+```
+# cd lc/build
+# CONVERT_LOG=./converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_server.so /usr/local/apache2/bin/apachectl -k start 
 ```
 
 The library supports IPv6 as well.
 
-Currently tested with `curl` & `wget` on both Centos 7 and Ubuntu {16,18,19}.
+Currently tested with `wget` and `apache2` Ubuntu {19}.
 
 The library is known to *not* work on Ubuntu 20 due to incompatibilities between `lib_syscall_intercept` and `libc 20.30-1`. This issue is tracked [here](https://github.com/pmem/syscall_intercept/issues/97).
 
-### Contributing
 
-Code contributions are more than welcome.
-
-Upon change, please run `uncrustify` (0.68) and validate that `cppcheck` is still happy:
-```
-$ uncrustify -c uncrustify.cfg -l C --replace --no-backup convert*.{h,c}
-$ cppcheck -I/usr/include -q --language=c --std=c99 --enable=warning,style,performance,portability -j "$(nproc)" --suppress=unusedStructMember ./convert*.{h,c}
-```
-
-To ease troubleshooting, download the 0-RTT TCP Convert [Wireshark dissector plugin](https://github.com/Tessares/convert-wireshark-dissector).
 
 ### Contact
 
-* [Gregory Vander Schueren](mailto:gregory.vanderschueren@tessares.net)
-* [Gregory Detal](mailto:gregory.detal@tessares.net)
-* [Olivier Bonaventure](mailto:olivier.bonaventure@tessares.net)
+* [Emery Kouassi Assogba](mailto:assogba.emery@gmail.com)
+* [Olivier Bonaventure](mailto:olivier.bonaventure@uclouvain.be)
 
 ### License
 

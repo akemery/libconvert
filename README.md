@@ -16,6 +16,7 @@ This is work in progress. The `libconvert_tcpls_client` library currently only s
 
 Fetch the Git submodules:
 ```
+$ cd tcplslibconvert
 $ git submodule init && git submodule update
 $ cd lib/picotcpls
 $ git submodule init && git submodule update
@@ -25,6 +26,8 @@ $ git pull https://github.com/frochet/picotcpls.git tcpls/ldpreload
 ###  Softwares
 
 * Download the following softwares needed to install wget, apache2 and libssl-dev on the provided Dockerfile
+  you can download them directly to the tcplslibconvert directory from the following repositories:
+* `libssl1.1_1.1.1g-1_amd64.deb` from `https://packages.debian.org/sid/amd64/libssl1.1/download`
 
 
 

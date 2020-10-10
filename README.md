@@ -87,6 +87,7 @@ The library is known to *not* work on Ubuntu 20 due to incompatibilities between
 ### Contact
 
 * [Emery Kouassi Assogba](mailto:assogba.emery@gmail.com)
+* [Florentin Rochet] (mailto:florentin.rochet@gmail.com)
 * [Olivier Bonaventure](mailto:olivier.bonaventure@uclouvain.be)
 
 ### License

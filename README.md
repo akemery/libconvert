@@ -16,6 +16,7 @@ This is work in progress. The `libconvert_tcpls_client` library currently only s
 
 Fetch the Git submodules:
 ```
+$ cd tcplslibconvert
 $ git submodule init && git submodule update
 $ cd lib/picotcpls
 $ git submodule init && git submodule update
@@ -25,6 +26,14 @@ $ git pull https://github.com/frochet/picotcpls.git tcpls/ldpreload
 ###  Softwares
 
 * Download the following softwares needed to install wget, apache2 and libssl-dev on the provided Dockerfile
+  you can download them directly to the tcplslibconvert directory from the following repositories:
+* `libssl1.1_1.1.1g-1_amd64.deb` from https://packages.debian.org/sid/amd64/libssl1.1/download
+* `libssl-dev_1.1.1g-1_amd64.deb` from https://packages.debian.org/sid/amd64/libssl-dev/download
+* `pcre-8.44.tar.bz2` from https://www.pcre.org/
+* `expat-2.2.9.tar.bz2` from https://libexpat.github.io/
+* `apr-util-1.6.1.tar.gz` from https://apr.apache.org/download.cgi
+* `apr-1.7.0.tar.gz` from https://apr.apache.org/download.cgi
+* `httpd-2.4.46.tar` from https://httpd.apache.org/download.cgi
 
 
 
@@ -36,6 +45,8 @@ $ cd lc
 $ mkdir build && cmake .. && make
 ```
 
+You need a client and a server so you have to run two docker instances. 
+Let's consider as the server the first instance  
 
 Otherwise, assuming all deps are installed, build and run the tests with CMake as follows:
 ```

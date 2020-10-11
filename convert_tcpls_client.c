@@ -57,7 +57,7 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
  
   if (*result >= 0) {
     ret = _tcpls_handshake(sd);
-    if(ret < 0){
+    if(ret != 0){
       log_warn("handshake failed %d:%d", sd, *result);
       return SYSCALL_RUN;
     }

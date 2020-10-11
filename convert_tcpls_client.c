@@ -122,16 +122,19 @@ static int _handle_recvmsg(long arg0, long arg1, long arg2, long *result){
   return SYSCALL_RUN;
 }
 
-static int _handle_sendto(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long *result){
+static int _handle_sendto(long arg0, long arg1, long arg2, UNUSED long arg3, UNUSED long arg4, UNUSED long arg5, long *result){
   struct tcpls_con *con;
   int sd = (int)arg0;
+  size_t size = (size_t)arg2; 
+  uint8_t * buff = (uint8_t *) arg1;
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
   log_debug("TCPLS sendto on %d\n", sd);
-  *result = syscall_no_intercept(SYS_sendto, arg0, arg1, arg2, arg3, arg4, arg5);
+  //*result = syscall_no_intercept(SYS_sendto, arg0, arg1, arg2, arg3, arg4, arg5);
+  *result = _tcpls_do_send(buff, size);
   if(*result >= 0){
-    log_debug("TCPLS sendto on %d:%d\n", sd, *result);
+    log_debug("TCPLS sendto on socket descriptor %d, %d bytes written", sd, *result);
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS sendto %d failed with error: %d", sd, *result);

@@ -257,7 +257,8 @@ static __attribute__((constructor)) void init(void) {
     if (!_log)
       fprintf(stderr, "convert: unable to open log %s: %s",
 			        log_path, strerror(errno));
-    log_add_fp(_log, LOG_FATAL);
+    log_add_fp(_log, LOG_DEBUG);
+    //log_set_fp(_log);
   }
   log_info("Starting interception");
   intercept_hook_point = _hook;

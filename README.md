@@ -27,8 +27,8 @@ $ git submodule init && git submodule update
 
 * Download the following softwares needed to install wget, apache2 and libssl-dev on the provided Dockerfile
   you can download them directly to the tcplslibconvert directory from the following repositories:
-* `libssl1.1_1.1.1g-1_amd64.deb` from https://packages.debian.org/sid/amd64/libssl1.1/download
-* `libssl-dev_1.1.1g-1_amd64.deb` from https://packages.debian.org/sid/amd64/libssl-dev/download
+* `libssl1.1_1.1.1h-1_amd64.deb` from https://packages.debian.org/sid/amd64/libssl1.1/download
+* `libssl-dev_1.1.1h-1_amd64.deb` from https://packages.debian.org/sid/amd64/libssl-dev/download
 * `pcre-8.44.tar.bz2` from https://www.pcre.org/
 * `expat-2.2.9.tar.bz2` from https://libexpat.github.io/
 * `apr-util-1.6.1.tar.gz` from https://apr.apache.org/download.cgi

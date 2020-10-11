@@ -1,6 +1,6 @@
 #!/bin/bash
-dpkg -i libssl1.1_1.1.1g-1_amd64.deb
-dpkg -i libssl-dev_1.1.1g-1_amd64.deb
+dpkg -i libssl1.1_1.1.1h-1_amd64.deb
+dpkg -i libssl-dev_1.1.1h-1_amd64.deb
 #dpkg -i net-tools_1.60+git20161116.90da8a0-1_amd64.deb
 #dpkg -i libnettle4_2.7.1-5+deb8u2_amd64.deb
 #dpkg -i libhogweed2_2.7.1-5+deb8u2_amd64.deb
@@ -22,7 +22,7 @@ make install
 cd /lc
 tar xvf  apr-util-1.6.1.tar.gz
 tar xvf  apr-1.7.0.tar.gz
-tar xvf httpd-2.4.46.tar
+tar xvf httpd-2.4.46.tar.gz
 mkdir -p httpd-2.4.46/srclib/apr-util/
 mkdir -p httpd-2.4.46/srclib/apr/
 cp -r apr-util-1.6.1/* httpd-2.4.46/srclib/apr-util/

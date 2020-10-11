@@ -73,7 +73,7 @@ Client side:
 Server side: 
 ```
 # cd lc/build
-# CONVERT_LOG=./converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_server.so /usr/local/apache2/bin/apachectl -k start 
+# CONVERT_LOG=./server_converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_server.so /usr/local/apache2/bin/apachectl -k start 
 ```
 
 The library supports IPv6 as well.

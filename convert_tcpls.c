@@ -427,7 +427,7 @@ static size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size){
 
 size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, int is_client){
   int n;
-  if(header_buff_offset && is_client){
+  if(header_buff_offset && is_client && (size == header_buff_offset)){
     log_debug("tcpls_do_rcvfrom : copy %d bytes from recv buffer to application that expect %d bytes", header_buff_offset, size);
     memcpy(buf, tcpls_header_buff, header_buff_offset);
     n = header_buff_offset;
@@ -437,7 +437,7 @@ size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, int is_client){
     if(n > 0){
       recvfrom_offset += n;
       //for(int i = 0; i < n; i++)
-        //log_debug("recvfrom %x",*(buf+i));
+        //log_debug(" %x",*(buf+i));
       memcpy(tcpls_header_buff+header_buff_offset, buf, n);
       header_buff_offset+=n;
     }
@@ -485,7 +485,7 @@ size_t _tcpls_do_send(uint8_t *buf, size_t size){
     else
        streamid = 2147483649;
   n = tcpls_send(tcpls->tls, streamid, buf, size);
-  //for(int i = 0; i < n; i++)
+  //for(int i = 0; i < (int) n; i++)
     //log_debug("%x",*(buf+i));
   return n;
 }

@@ -99,7 +99,7 @@ static int _handle_recvfrom(long arg0, long arg1, long arg2,   UNUSED long arg3,
   //*result = syscall_no_intercept(SYS_recvfrom, arg0, arg1, arg2, arg3, arg4, arg5);
   *result = _tcpls_do_recvfrom(sd,buf, size, 1);
   if(*result >= 0){
-    log_debug("TCPLS recvfrom on socket %d, %d bytes received", sd, *result);
+    log_debug("TCPLS recvfrom on socket %d, %d bytes received expected %d bytes", sd, *result, size);
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS recvfrom %d failed with error: %d", sd, *result);

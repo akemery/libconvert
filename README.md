@@ -78,7 +78,7 @@ Server side:
 
 The library supports IPv6 as well.
 
-Currently tested with `wget` and `apache2` Ubuntu {19}.
+Currently tested with `curl`, `wget` and `apache2` Ubuntu {19}.
 
 The library is known to *not* work on Ubuntu 20 due to incompatibilities between `lib_syscall_intercept` and `libc 20.30-1`. This issue is tracked [here](https://github.com/pmem/syscall_intercept/issues/97).
 

@@ -10,10 +10,11 @@
 #include <picotcpls.h>
 #include "picotls/openssl.h"
 
+#include "convert_util.h"
 #include "convert_tcpls.h"
 
-const char * cert = "assets/server.crt";
-const char * cert_key = "assets/server.key";
+const char * cert = "../assets/server.crt";
+const char * cert_key = "../assets/server.key";
 
 static int read_offset = 0;
 static int recvfrom_offset = 0;

@@ -395,8 +395,9 @@ static size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size){
   }
   else{
     do{
-      while((ret = tcpls_receive(tcpls->tls, &tcpls_buf, 26276, &timeout))==TCPLS_HOLD_DATA_TO_READ)
-         ;
+      //while((ret = tcpls_receive(tcpls->tls, &tcpls_buf, 26276, &timeout))==TCPLS_HOLD_DATA_TO_READ)
+        // ;
+      ret = tcpls_receive(tcpls->tls, &tcpls_buf, size, &timeout);
       memset(buf,0,size);
       n = tcpls_buf.off;
     } while(!n && !ret);

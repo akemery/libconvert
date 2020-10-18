@@ -19,13 +19,20 @@ static FILE *		_log;
 
 static int _handle_socket(long arg0, long arg1, long arg2, long *result){
   /* Only consider TCP-based sockets. */
-  if (((arg0 == AF_INET) || (arg0 == AF_INET6)) && (arg1 == SOCK_STREAM)) {
+  if (((arg0 == AF_INET) || (arg0 == AF_INET6)) && (arg1 & SOCK_STREAM)) {
     *result = syscall_no_intercept(SYS_socket, arg0, arg1, arg2);
     if (*result >= 0){
       /* TCPLS context initializing */
-      _tcpls_init(0);
+      if(_tcpls_init(0) < 0){
+        log_warn("TCPLS: context init failed");
+        return SYSCALL_RUN;
+      }
       /* TCPLS allocating con_info */
-      _tcpls_alloc_con_info(*result);
+      struct tcpls_con * con =  _tcpls_alloc_con_info(*result, 0, (int)arg0);
+      if(!con){
+        log_warn("TCPLS: alloc con_info failed");
+        return SYSCALL_RUN;
+      }
     }
     
     /* skip as we executed the syscall ourself. */
@@ -38,16 +45,15 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
   struct tcpls_con *con;
   struct sockaddr *	dest	= (struct sockaddr *)arg1;
   int sd = (int)arg0, ret;
-
+  log_warn("here 2");
   con = _tcpls_lookup(sd);
   if (!con)
     return SYSCALL_RUN;
-    
   switch (dest->sa_family) {
     case AF_INET:
     case AF_INET6:
       //*result = syscall_no_intercept(SYS_connect, arg0, arg1, arg2);
-      *result = _handle_tcpls_connect(sd, dest);
+      *result = _handle_tcpls_connect(sd, dest, con->tcpls);
         break;
     default:
       log_warn("sd %d specified an invalid address family %d", sd,
@@ -56,7 +62,7 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
   }
  
   if (*result >= 0) {
-    ret = _tcpls_handshake(sd);
+    ret = _tcpls_handshake(sd, con->tcpls);
     if(ret != 0){
       log_warn("handshake failed %d:%d", sd, *result);
       return SYSCALL_RUN;
@@ -79,7 +85,7 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
   if(!con)
     return SYSCALL_RUN;
   //*result = syscall_no_intercept(SYS_read, arg0, arg1, arg2);
-  *result = _tcpls_do_read(sd,buf, size, 1);
+  *result = _tcpls_do_read(sd,buf, size, 1, con->tcpls);
   if(*result >= 0){
     log_debug("TCPLS read on socket descriptor %d, %d bytes read", sd, *result);
     return SYSCALL_SKIP;
@@ -97,7 +103,7 @@ static int _handle_recvfrom(long arg0, long arg1, long arg2,   UNUSED long arg3,
   if(!con)
     return SYSCALL_RUN;
   //*result = syscall_no_intercept(SYS_recvfrom, arg0, arg1, arg2, arg3, arg4, arg5);
-  *result = _tcpls_do_recvfrom(sd,buf, size, 1);
+  *result = _tcpls_do_recvfrom(sd,buf, size, 1, con->tcpls);
   if(*result >= 0){
     log_debug("TCPLS recvfrom on socket %d, %d bytes received expected %d bytes", sd, *result, size);
     return SYSCALL_SKIP;
@@ -132,7 +138,7 @@ static int _handle_sendto(long arg0, long arg1, long arg2, UNUSED long arg3, UNU
     return SYSCALL_RUN;
   log_debug("TCPLS sendto on %d\n", sd);
   //*result = syscall_no_intercept(SYS_sendto, arg0, arg1, arg2, arg3, arg4, arg5);
-  *result = _tcpls_do_send(buff, size);
+  *result = _tcpls_do_send(buff, size, con->tcpls);
   if(*result >= 0){
     log_debug("TCPLS sendto on socket descriptor %d, %d bytes written", sd, *result);
     return SYSCALL_SKIP;
@@ -166,7 +172,7 @@ static int _handle_write(long arg0, long arg1, long arg2, long *result){
   if(!con)
     return SYSCALL_RUN;
   //*result = syscall_no_intercept(SYS_write, arg0, arg1, arg2);
-  *result = _tcpls_do_send(buff, size);
+  *result = _tcpls_do_send(buff, size, con->tcpls);
   if(*result >= 0){
     log_debug("TCPLS write on socket descriptor %d, %d bytes written", sd, *result);
     return SYSCALL_SKIP;
@@ -177,8 +183,13 @@ static int _handle_write(long arg0, long arg1, long arg2, long *result){
 
 static int _handle_close(long arg0, long *result){
   int sd = (int)arg0;
+  struct tcpls_con *con;
+  con = _tcpls_lookup(sd);
+  if(!con)
+    return SYSCALL_RUN;
+  log_warn("here 10");
   if(_tcpls_free_con(sd)){
-      //log_debug("not handled socket %d:%d failed\n", sd, *result);
+      log_warn("not handled socket %d:%d failed\n", sd, *result);
       return SYSCALL_RUN;
   }
   *result = syscall_no_intercept(SYS_close, arg0);

@@ -25,9 +25,16 @@ static int _handle_socket(long arg0, long arg1, long arg2, long *result){
     *result = syscall_no_intercept(SYS_socket, arg0, arg1, arg2);
     if (*result >= 0){
       /* TCPLS context initializing*/
-      _tcpls_init(1);
+      if(_tcpls_init(1) < 0){
+        log_warn("TCPLS: context init failed");
+        return SYSCALL_RUN;
+      }
       /* TCPLS allocating con_info */
-      _tcpls_alloc_con_info(*result);
+      struct tcpls_con * con = _tcpls_alloc_con_info(*result, 1, (int)arg0);
+      if(!con){
+        log_warn("TCPLS: alloc con_info failed");
+        return SYSCALL_RUN;
+      }
     }
     /* skip as we executed the syscall ourself. */
     return SYSCALL_SKIP;
@@ -91,7 +98,12 @@ static int _handle_accept4(long arg0, long arg1, long arg2, long arg3, long *res
     if(ret != 0){
       return SYSCALL_RUN;
     }
-    ret = _tcpls_handshake(*result);
+    con = _tcpls_lookup(*result);
+    if(!con){
+      log_warn("TCPLS: _handle_accept4 no connection state for %d", *result);
+      return SYSCALL_RUN;
+    }
+    ret = _tcpls_handshake(*result, con->tcpls);
     if(ret != 0){
       return SYSCALL_RUN;
     }
@@ -105,6 +117,7 @@ static int _handle_accept4(long arg0, long arg1, long arg2, long arg3, long *res
 UNUSED static int _handle_accept(long arg0, long arg1, long arg2, long arg3, long *result){
   int sd = (int)arg0;
   struct tcpls_con *con;
+  struct sockaddr *addr = (struct sockaddr *)arg1;
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
@@ -112,7 +125,7 @@ UNUSED static int _handle_accept(long arg0, long arg1, long arg2, long arg3, lon
   *result = syscall_no_intercept(SYS_accept, arg0, arg1, arg2, arg3);
   if(*result >= 0){
     log_debug("TCPLS accept on %d:%d", sd, *result);
-    _tcpls_alloc_con_info(*result);
+    _tcpls_alloc_con_info(*result, 1, addr->sa_family);
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS accept on %d failed with error: %d", sd, *result);
@@ -128,7 +141,7 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
   if(!con)
     return SYSCALL_RUN;
   //*result = syscall_no_intercept(SYS_read, arg0, arg1, arg2);
-  *result = _tcpls_do_read(sd, buf, size, 0);
+  *result = _tcpls_do_read(sd, buf, size, 0, con->tcpls);
   if(*result >= 0){
     log_debug("TCPLS read on socket descriptor :%d received :%d bytes", sd, *result);
     return SYSCALL_SKIP;
@@ -152,7 +165,7 @@ static int _handle_writev(long arg0, long arg1, long arg2, long *result){
     size_t iov_len = (size_t)iov[i].iov_len;
     uint8_t *iov_base = (uint8_t*)iov[i].iov_base;
     if(iov_len > 0){
-      *result += _tcpls_do_send(iov_base, iov_len);
+      *result += _tcpls_do_send(iov_base, iov_len, con->tcpls);
       log_debug("called tcpls_send on buffer:%x data_sent:%d bytes data_already_sent:%d bytes iovec_count:%d iter_counter:%d",iov_base, iov_len, *result, n, i);
     }
   }
@@ -176,7 +189,7 @@ static int _handle_write(long arg0, long arg1, long arg2, long *result){
     return SYSCALL_RUN;
   log_debug("TCPLS write on %d", sd);
   //*result = syscall_no_intercept(SYS_write, arg0, arg1, arg2);
-  *result = _tcpls_do_send(buf, size);
+  *result = _tcpls_do_send(buf, size, con->tcpls);
   if(*result >= 0){
     log_debug("TCPLS write on %d:%d", sd, *result);
     return SYSCALL_SKIP;
@@ -187,6 +200,10 @@ static int _handle_write(long arg0, long arg1, long arg2, long *result){
 
 static int _handle_close(long arg0, long *result){
   int sd = (int)arg0;
+  struct tcpls_con *con;
+  con = _tcpls_lookup(sd);
+  if(!con)
+    return SYSCALL_RUN;
   if(_tcpls_free_con(sd))
       return SYSCALL_RUN;
   *result = syscall_no_intercept(SYS_close, arg0);

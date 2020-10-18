@@ -149,10 +149,12 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
   log_warn("TCPLS read on %d failed with error: %d", sd, *result);
   return SYSCALL_RUN;
 }
+#define MAX_SEND_SIZE 16384
 
 static int _handle_writev(long arg0, long arg1, long arg2, long *result){
   int sd = (int)arg0;
   int n = (int)arg2, i;
+  size_t nbytes_sent;
   struct tcpls_con *con;
   con = _tcpls_lookup(sd);
   if(!con)
@@ -164,12 +166,24 @@ static int _handle_writev(long arg0, long arg1, long arg2, long *result){
   for(i = 0; i < n; i++){
     size_t iov_len = (size_t)iov[i].iov_len;
     uint8_t *iov_base = (uint8_t*)iov[i].iov_base;
-    if(iov_len > 0){
-      *result += _tcpls_do_send(iov_base, iov_len, con->tcpls);
-      log_debug("called tcpls_send on buffer:%x data_sent:%d bytes data_already_sent:%d bytes iovec_count:%d iter_counter:%d",iov_base, iov_len, *result, n, i);
+    nbytes_sent = 0;
+    if(iov_len < MAX_SEND_SIZE){
+      nbytes_sent = _tcpls_do_send(iov_base, iov_len, con->tcpls);
+      *result += nbytes_sent;
+      log_debug("called tcpls_send on buffer:%x initial_data:%ld bytes; data_sent:%ld bytes; data_already_sent:%ld bytes iovec_count:%d iter_counter:%d",iov_base, iov_len, nbytes_sent, *result, n, i);
+    } else{
+      int remain = (int)(iov_len % MAX_SEND_SIZE);
+      int iter = (int)(iov_len / MAX_SEND_SIZE);
+      for(int j = 0; j < iter ; j ++){
+        nbytes_sent = _tcpls_do_send(iov_base + j*MAX_SEND_SIZE, MAX_SEND_SIZE, con->tcpls);
+        *result += nbytes_sent;
+        log_debug("called tcpls_send on buffer:%x initial_data:%ld bytes; data_sent:%ld bytes; data_already_sent:%ld bytes iovec_count:%d iter_counter:%d",iov_base, iov_len, nbytes_sent, *result, n, i);
+      }
+      nbytes_sent = _tcpls_do_send(iov_base + iter*MAX_SEND_SIZE, remain, con->tcpls);
+      *result += nbytes_sent;
+      log_debug("called tcpls_send on buffer:%x initial_data:%ld bytes; data_sent:%ld bytes; data_already_sent:%ld bytes iovec_count:%d iter_counter:%d",iov_base, iov_len, nbytes_sent, *result, n, i);
     }
   }
-  
   if(*result >= 0){
     log_debug("TCPLS end writev on socket descriptor:%d", sd);
     return SYSCALL_SKIP;

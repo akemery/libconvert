@@ -15,7 +15,7 @@ if [ -f $file ];
       else
         rm $file;
         echo "download of $file failed";
-        exit;
+        exit 1;
     fi
 fi
 url_counter=$((url_counter + 1))
@@ -59,3 +59,6 @@ cd httpd-2.4.46
 make
 make install
 ldconfig
+truncate -s 1M  /usr/local/apache2/htdocs/1M
+truncate -s 5M  /usr/local/apache2/htdocs/5M
+truncate -s 10M  /usr/local/apache2/htdocs/10M

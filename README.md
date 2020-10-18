@@ -23,20 +23,6 @@ $ git pull https://github.com/frochet/picotcpls.git tcpls/ldpreload
 $ git submodule init && git submodule update
 ```
 
-###  Softwares
-
-* Download the following softwares needed to install wget, apache2 and libssl-dev on the provided Dockerfile
-  you can download them directly to the tcplslibconvert directory from the following repositories:
-* `libssl1.1_1.1.1h-1_amd64.deb` from https://packages.debian.org/sid/amd64/libssl1.1/download
-* `libssl-dev_1.1.1h-1_amd64.deb` from https://packages.debian.org/sid/amd64/libssl-dev/download
-* `pcre-8.44.tar.bz2` from https://www.pcre.org/
-* `expat-2.2.9.tar.bz2` from https://libexpat.github.io/
-* `apr-util-1.6.1.tar.gz` from https://apr.apache.org/download.cgi
-* `apr-1.7.0.tar.gz` from https://apr.apache.org/download.cgi
-* `httpd-2.4.46.tar` from https://httpd.apache.org/download.cgi
-
-
-
 The easiest way to build both libraries and run the tests is with the provided Dockerfile (which contains all deps):
 ```
 $ cd tcplslibconvert
@@ -69,6 +55,7 @@ Client side:
 ```
 # cd lc/build
 # CONVERT_LOG=./client_converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_client.so wget http://172.17.0.2
+# CONVERT_LOG=./client_converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_client.so /usr/local/apache2/bin/ab -n 100 -c 10 http://172.17.0.2/
 ```
 Server side: 
 ```

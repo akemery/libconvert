@@ -45,7 +45,6 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
   struct tcpls_con *con;
   struct sockaddr *	dest	= (struct sockaddr *)arg1;
   int sd = (int)arg0, ret;
-  log_warn("here 2");
   con = _tcpls_lookup(sd);
   if (!con)
     return SYSCALL_RUN;
@@ -187,7 +186,6 @@ static int _handle_close(long arg0, long *result){
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
-  log_warn("here 10");
   if(_tcpls_free_con(sd)){
       log_warn("not handled socket %d:%d failed\n", sd, *result);
       return SYSCALL_RUN;

@@ -275,7 +275,6 @@ struct tcpls_con *_tcpls_lookup(int sd){
   for(i = 0; i < tcpls_con_l->size; i++){
     con = list_get(tcpls_con_l, i);
     if(con->sd == sd){
-      log_warn("que se passe t'il %d:%d:%p:%d", con->af_family, con->sd, con->tcpls, i);
       return con;
     }
   }
@@ -302,29 +301,19 @@ int _tcpls_free_con(int sd){
 int _handle_tcpls_connect(int sd, struct sockaddr * dest, tcpls_t * tcpls){
   int result = -1;
   struct timeval timeout = {.tv_sec = 5, .tv_usec = 0};
-  /*struct tcpls_con *con = _tcpls_lookup(sd);
-  if(!con)
-    return result;*/
-  log_warn("here start: %d:", sd);
   if(dest->sa_family == AF_INET){
     result = tcpls_add_v4(tcpls->tls, (struct sockaddr_in*)dest, 1, 0, 0);
-    log_warn("here 1': %d:%d", sd, result);
     if(result && result!=TCPLS_ADDR_EXIST){
-      log_warn("here 1: %d:%d", sd, result);
       return result;
     }
   }
   if(dest->sa_family == AF_INET6){
     result = tcpls_add_v6(tcpls->tls, (struct sockaddr_in6*)dest, 1, 0, 0);
-    log_warn("here 2': %d", sd);
     if(result && result!=TCPLS_ADDR_EXIST){
-      log_warn("here 2: %d", sd);
       return result;
     }
   }
-  log_warn("here 3: %d:%p", sd, tcpls);
   result = tcpls_connect(tcpls->tls, NULL, dest, &timeout, sd);
-  log_warn("here end: %d", sd);
   return result;
 }
 

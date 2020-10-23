@@ -17,19 +17,15 @@ This is work in progress. The `libconvert_tcpls_client` library currently only s
 Fetch the Git submodules:
 ```
 $ cd tcplslibconvert
-$ git submodule init && git submodule update
-$ cd lib/picotcpls
-$ git pull https://github.com/frochet/picotcpls.git tcpls/ldpreload
-$ git submodule init && git submodule update
+$ git submodule update --init --recursive --remote
 ```
 
 The easiest way to build both libraries and run the tests is with the provided Dockerfile (which contains all deps):
 ```
 $ cd tcplslibconvert
-$ sudo docker build -t uac.bj/libconvert .
-$ sudo docker run  -v $PWD:/lc -it uac.bj/libconvert
+$ docker build -t tcplslibconvert .
+$ docker run -v $PWD:/lc -it tcplslibconvert
 $ cd lc
-$ bash install_lib.sh
 $ mkdir build && cd build && cmake .. && make
 ```
 
@@ -47,7 +43,7 @@ To use the `libconvert_server`  and `libconvert_client` libs:
 Run the following command in two different terminal to have two docker instances.
 ```
 $ cd tcplslibconvert 
-$ sudo docker run  -v $PWD:/lc -it uac.bj/libconvert
+$ docker run  -v $PWD:/lc -it tcplslibconvert
 ```
 Assuming the server has the address 172.17.0.2 and the client has the address 172.17.0.3
 

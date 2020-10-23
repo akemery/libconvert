@@ -6,5 +6,5 @@
 	url = https://github.com/rxi/log.c.git
 [submodule "lib/picotcpls"]
 	path = lib/picotcpls
-	url = https://github.com/frochet/picotcpls.git
-	branch = master
+	url = https://github.com/pluginized-protocols/picotcpls.git
+	branch = tcpls/ldpreload

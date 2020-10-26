@@ -29,6 +29,11 @@ $ cd lc
 $ mkdir build && cd build && cmake .. && make
 ```
 
+Note, to use gdb without trouble on the preload library, you can do :
+```
+$ docker run --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v $PWD:/lc -it tcplslibconvert
+```
+
 You need a client and a server so you have to run two docker instances. 
 
 ### Usage & dependencies of `libconvert_tcpls_server` and `libconvert_tcpls_client`

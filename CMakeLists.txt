@@ -7,7 +7,7 @@ option(BUILD_EXAMPLES "" OFF)
 add_subdirectory(lib/syscall_intercept)
 add_subdirectory(lib/picotcpls)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror -Wextra")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g3 -Wall -Werror -Wextra")
 
 include_directories(lib)
 include_directories(lib/syscall_intercept/include)

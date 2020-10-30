@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     faketime \
     iproute2 \
     iptables \
+    gdb \
     git \
     libcapstone-dev \
     libscope-guard-perl \
@@ -32,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-wheel \
     tcpdump \
     uncrustify \
+    vim \
     wget
 
 RUN pip3 install scapy

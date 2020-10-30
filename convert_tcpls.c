@@ -16,14 +16,11 @@
 const char * cert = "../assets/server.crt";
 const char * cert_key = "../assets/server.key";
 
-static int read_offset = 0;
-static int recvfrom_offset = 0;
-static size_t header_buff_offset = 0;
-static size_t recv_buff_offset = 0;
-static size_t tmp_buff_size = 0;
+/* 10 MiB buf */
+#define TCPLS_BUFFER_SIZE 10485760
+static ptls_buffer_t tcpls_buf;
+static int tcpls_buf_read_offset = 0;
 
-char tcpls_header_buff[RECV_BUFF_SIZE];
-char tcpls_recv_buff[RECV_BUFF_SIZE];
 
 static ptls_context_t *ctx;
 //static tcpls_t *tcpls;
@@ -38,7 +35,17 @@ static int handle_stream_event(tcpls_t *tcpls, tcpls_event_t event,
 static int handle_client_connection_event(tcpls_event_t event, int socket, int transportid, void *cbdata) ;
 static int handle_client_stream_event(tcpls_t *tcpls, tcpls_event_t event, streamid_t streamid,
     int transportid, void *cbdata);
-    
+
+static void shift_buffer(ptls_buffer_t *buf, size_t delta)
+{
+  if (delta != 0) {
+    assert(delta <= buf->off);
+    if (delta != buf->off)
+      memmove(buf->base, buf->base + delta, buf->off - delta);
+    buf->off -= delta;
+  }
+}
+
 static int handle_connection_event(tcpls_event_t event, int socket, int transportid, void *cbdata) {
   list_t *conntcpls = (list_t*) cbdata;
   struct tcpls_con *con;
@@ -226,17 +233,20 @@ static int handle_mpjoin(int socket, uint8_t *connid, uint8_t *cookie, uint32_t 
 }
 
 static int tcpls_do_handshake(int sd, tcpls_t * tcpls){
-  int resultat = -1;
+  int result = -1;
   ptls_handshake_properties_t prop = {NULL};
   memset(&prop, 0, sizeof(prop));
   prop.socket = sd;
   prop.received_mpjoin_to_process = &handle_mpjoin;
-  if ((resultat = tcpls_handshake(tcpls->tls, &prop)) != 0) {
-    if (resultat == PTLS_ERROR_HANDSHAKE_IS_MPJOIN) 
-      return resultat;
-    log_warn("tcpls_handshake failed with ret (%d)\n", resultat);
+  if ((result = tcpls_handshake(tcpls->tls, &prop)) != 0) {
+    if (result == PTLS_ERROR_HANDSHAKE_IS_MPJOIN) 
+      return result;
+    log_warn("tcpls_handshake failed with ret (%d)\n", result);
   }
-  return resultat;
+  /* if the hanshake succeeds, we'll need a buffer for recv/read */
+  ptls_buffer_init(&tcpls_buf, "", 0);
+  ptls_buffer_reserve(&tcpls_buf, TCPLS_BUFFER_SIZE);
+  return result;
 }
 
 int _tcpls_init(int is_server){
@@ -361,7 +371,7 @@ int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
 
 int _tcpls_set_ours_addr(struct sockaddr *addr){
   if(!ours_addr_list)
-    return -1;
+   return -1;
   list_add(ours_addr_list, addr);
   return ours_addr_list->size;
 }
@@ -373,106 +383,49 @@ int _tcpls_handshake(int sd, tcpls_t *tcpls){
   return  tcpls_do_handshake(sd, tcpls); 
 }
 
-static size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls){
-  size_t n = 0;
+static size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) {
   int ret = 0;
   struct timeval timeout = {.tv_sec = 2, .tv_usec = 0};
-  ptls_buffer_t tcpls_buf;
-  ptls_buffer_init(&tcpls_buf, "", 0);
-  if(tmp_buff_size){
-    if(tmp_buff_size <= size){
-      memcpy(buf, tcpls_recv_buff + recv_buff_offset, tmp_buff_size);
-      n = tmp_buff_size;
-      tmp_buff_size = 0;
-      recv_buff_offset = 0;
-      log_debug("received mores data (%d bytes) than expected (%d bytes) we sent %d bytes, it remains %d bytes", tmp_buff_size + n, size, n,  tmp_buff_size);
-    }
-    else{
-      memcpy(buf, tcpls_recv_buff + recv_buff_offset, size);
-      n = size;
-      tmp_buff_size -= size;
-      recv_buff_offset += size;
-      log_debug("received mores data (%d bytes) than expected (%d bytes) we sent %d bytes, it remains %d bytes", tmp_buff_size + n, size, n,  tmp_buff_size);
-    }
+  if (tcpls_buf.off-tcpls_buf_read_offset >= size) {
+    memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset, size);
+    tcpls_buf_read_offset += size;
+    if (tcpls_buf_read_offset >= 0.9 * TCPLS_BUFFER_SIZE)
+      shift_buffer(&tcpls_buf, tcpls_buf_read_offset);
+    return size;
   }
   else{
-    do{
-      //while((ret = tcpls_receive(tcpls->tls, &tcpls_buf, 26276, &timeout))==TCPLS_HOLD_DATA_TO_READ)
-        // ;
-      ret = tcpls_receive(tcpls->tls, &tcpls_buf, size, &timeout);
-      memset(buf,0,size);
-      n = tcpls_buf.off;
-    } while(!n && !ret);
-    if(n>0){
-      if(n <= size){
-        memcpy(buf, tcpls_buf.base+4, n-4);
-        n = n - 8;
-        tmp_buff_size = 0;
-      }else{
-        log_debug("4: do_recv high than expected %d:%d:%d::", n, sd, size);
-        recv_buff_offset = 0;
-        memcpy(tcpls_recv_buff, tcpls_buf.base+4, n-4);
-        tmp_buff_size = n - 8;
-        memcpy(buf, tcpls_recv_buff + recv_buff_offset, size);
-        recv_buff_offset +=size;
-        tmp_buff_size -= size;
-        n = size;
+    while ((ret = tcpls_receive(tcpls->tls, &tcpls_buf, &timeout)) == TCPLS_HOLD_DATA_TO_READ)
+      ;
+    if (ret == TCPLS_OK) {
+      if (tcpls_buf.off-tcpls_buf_read_offset >= size) {
+        memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset, size);
+        tcpls_buf_read_offset += size;
+        if (tcpls_buf_read_offset >= 0.9 * TCPLS_BUFFER_SIZE)
+          shift_buffer(&tcpls_buf, tcpls_buf_read_offset);
+        return size;
       }
+      else {
+        memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset,
+            tcpls_buf.off-tcpls_buf_read_offset);
+        tcpls_buf_read_offset = 0;
+        tcpls_buf.off = 0;
+        return tcpls_buf.off-tcpls_buf_read_offset;
+      }
+
     }
     else{
       log_debug("TCPLS tcpls_receive return error %d code on socket descriptor %d", ret, sd);
-      n = ret;
+      return 0;
     }
   }
-  ptls_buffer_dispose(&tcpls_buf);
-  return n;
 }
 
-size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, int is_client, tcpls_t *tcpls){
-  int n;
-  if(header_buff_offset && is_client && (size == header_buff_offset)){
-    log_debug("tcpls_do_rcvfrom : copy %d bytes from recv buffer to application that expect %d bytes", header_buff_offset, size);
-    memcpy(buf, tcpls_header_buff, header_buff_offset);
-    n = header_buff_offset;
-    header_buff_offset = 0;
-  } else{
-    n = _tcpls_do_recv(sd, buf, size, tcpls);
-    if(n > 0){
-      recvfrom_offset += n;
-      //for(int i = 0; i < n; i++)
-        //log_debug(" %x",*(buf+i));
-      memcpy(tcpls_header_buff+header_buff_offset, buf, n);
-      header_buff_offset+=n;
-    }
-    else{
-      log_debug("Recvfrom --> recv_offset:read_offset:recvfrom_offset %d:%d:%d", header_buff_offset, read_offset, recvfrom_offset);
-    }
-  }
-  return n;
+size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) {
+  return _tcpls_do_recv(sd, buf, size, tcpls);
 }
 
-size_t _tcpls_do_read(int sd, uint8_t *buf, size_t size, int is_client, tcpls_t *tcpls){
-  int n;
-  if(header_buff_offset && is_client && (size == header_buff_offset)){
-    log_debug("tcpls_do_read : copy %d bytes from recv buffer to application that expect %d bytes", header_buff_offset, size);
-    memcpy(buf, tcpls_header_buff, header_buff_offset);
-    n = header_buff_offset;
-    header_buff_offset = 0;
-  }
-  else{
-    n = _tcpls_do_recv(sd, buf, size, tcpls);
-    if(header_buff_offset)
-      header_buff_offset = 0;
-    if(n > 0){
-      read_offset += n;
-      //for(int i = 0; i < n; i++)
-        //log_debug("read %x",*(buf+i));
-    }
-    else{
-      log_debug("TCPLS tcpls_do_read return error code %d on socket descriptor %d", n, sd);
-    }
-  }
-  return n;
+size_t _tcpls_do_read(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) {
+  return _tcpls_do_recv(sd, buf, size, tcpls);
 }
 
 

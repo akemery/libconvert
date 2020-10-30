@@ -1,14 +1,13 @@
-#define RECV_BUFF_SIZE 32768
 int _tcpls_init(int is_server);
- struct tcpls_con * _tcpls_alloc_con_info(int sd, int is_server, int af_family);
+struct tcpls_con * _tcpls_alloc_con_info(int sd, int is_server, int af_family);
 struct tcpls_con *_tcpls_lookup(int sd);
 int _tcpls_free_con(int sd);
 int _tcpls_set_ours_addr(struct sockaddr *addr);
 int _handle_tcpls_connect(int sd, struct sockaddr * dest, tcpls_t *tcpls);
 int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr);
 int _tcpls_handshake(int sd, tcpls_t *tcpls);
-size_t _tcpls_do_read(int sd, uint8_t *buf, size_t size, int is_client, tcpls_t *tcpls);
-size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, int is_client, tcpls_t * tcpls);
+size_t _tcpls_do_read(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls);
+size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, tcpls_t * tcpls);
 size_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls);
 
 struct cli_data {

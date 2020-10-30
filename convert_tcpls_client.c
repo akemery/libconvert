@@ -84,7 +84,7 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
   if(!con)
     return SYSCALL_RUN;
   //*result = syscall_no_intercept(SYS_read, arg0, arg1, arg2);
-  *result = _tcpls_do_read(sd,buf, size, 1, con->tcpls);
+  *result = _tcpls_do_read(sd,buf, size, con->tcpls);
   if(*result >= 0){
     log_debug("TCPLS read on socket descriptor %d, %d bytes read", sd, *result);
     return SYSCALL_SKIP;
@@ -102,7 +102,7 @@ static int _handle_recvfrom(long arg0, long arg1, long arg2,   UNUSED long arg3,
   if(!con)
     return SYSCALL_RUN;
   //*result = syscall_no_intercept(SYS_recvfrom, arg0, arg1, arg2, arg3, arg4, arg5);
-  *result = _tcpls_do_recvfrom(sd,buf, size, 1, con->tcpls);
+  *result = _tcpls_do_recvfrom(sd,buf, size, con->tcpls);
   if(*result >= 0){
     log_debug("TCPLS recvfrom on socket %d, %d bytes received expected %d bytes", sd, *result, size);
     return SYSCALL_SKIP;

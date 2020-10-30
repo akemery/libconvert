@@ -141,7 +141,7 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
   if(!con)
     return SYSCALL_RUN;
   //*result = syscall_no_intercept(SYS_read, arg0, arg1, arg2);
-  *result = _tcpls_do_read(sd, buf, size, 0, con->tcpls);
+  *result = _tcpls_do_read(sd, buf, size, con->tcpls);
   if(*result >= 0){
     log_debug("TCPLS read on socket descriptor :%d received :%d bytes", sd, *result);
     return SYSCALL_SKIP;

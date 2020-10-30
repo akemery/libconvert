@@ -62,7 +62,7 @@ static int handle_connection_event(tcpls_event_t event, int socket, int transpor
           con->state = CONNECTED;
           break;
         }
-      }     
+      }
       break;
     case CONN_CLOSED:
       log_debug("connection_event_call_back: CONNECTION CLOSED %d",socket);
@@ -232,10 +232,9 @@ static int handle_mpjoin(int socket, uint8_t *connid, uint8_t *cookie, uint32_t 
   return -1;
 }
 
-static int tcpls_do_handshake(int sd, tcpls_t * tcpls){
+static int tcpls_do_handshake(int sd, tcpls_t *tcpls){
   int result = -1;
   ptls_handshake_properties_t prop = {NULL};
-  memset(&prop, 0, sizeof(prop));
   prop.socket = sd;
   prop.received_mpjoin_to_process = &handle_mpjoin;
   if ((result = tcpls_handshake(tcpls->tls, &prop)) != 0) {
@@ -253,36 +252,26 @@ int _tcpls_init(int is_server){
   const char *host = is_server ? "SERVER" : "CLIENT";
   log_debug("Init new tcpls context for %s", host);
   set_tcpls_ctx_options(is_server);
-  /*if(!is_server){
-    tcpls = tcpls_new(ctx, is_server);
-    if(!tcpls)
-      return -1;
-  }*/
-  if(!tcpls_con_l)
-    return -1;
   return 0;
 }
 
 struct tcpls_con * _tcpls_alloc_con_info(int sd, int is_server, int af_family){
-  struct tcpls_con *con = (struct tcpls_con *)malloc(sizeof(struct tcpls_con));
-  log_debug("1 adding new socket descriptor :%d",sd);
-  if(!con)
-    return con;
-  con->sd = sd;
-  con->state = CLOSED;
-  con->af_family = af_family;
-  con->tcpls = tcpls_new(ctx, is_server);
-  list_add(tcpls_con_l, con); 
+  struct tcpls_con con;
+  log_debug("1 adding new socket descriptor :%d", sd);
+  con.sd = sd;
+  con.state = CLOSED;
+  con.af_family = af_family;
+  con.tcpls = tcpls_new(ctx, is_server);
+  list_add(tcpls_con_l, &con); 
   log_debug("adding new socket descriptor :%d",sd);
-  return con;
+  return list_get(tcpls_con_l, tcpls_con_l->size-1);
 }
 
 struct tcpls_con *_tcpls_lookup(int sd){
-  int i;
   struct tcpls_con * con;
   if(!tcpls_con_l || !tcpls_con_l->size)
     return NULL;
-  for(i = 0; i < tcpls_con_l->size; i++){
+  for(int i = 0; i < tcpls_con_l->size; i++){
     con = list_get(tcpls_con_l, i);
     if(con->sd == sd){
       return con;
@@ -329,7 +318,7 @@ int _handle_tcpls_connect(int sd, struct sockaddr * dest, tcpls_t * tcpls){
 
 int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
   int result = -1;
-  struct tcpls_con * con;
+  struct tcpls_con *con;
   struct sockaddr our_addr;
   socklen_t salen = sizeof(struct sockaddr);
   con = _tcpls_alloc_con_info(sd, 1, addr->sa_family);
@@ -337,31 +326,20 @@ int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
     log_warn("failed to alloc con %d", sd);
     return result;
   }
-  /*con->tcpls = tcpls_new(ctx, 1);
-  if(!con->tcpls)
-    return -1;*/
   if(addr->sa_family == AF_INET){
-    result = tcpls_add_v4(con->tcpls->tls, (struct sockaddr_in*)addr, 1, 0, 0);
-    if(result)
-      return result;
+    tcpls_add_v4(con->tcpls->tls, (struct sockaddr_in*)addr, 1, 0, 0);
   }
-  if(addr->sa_family == AF_INET6){
-    result = tcpls_add_v6(con->tcpls->tls, (struct sockaddr_in6*)addr, 1, 0, 0);
-    if(result)
-      return result;
+  else if(addr->sa_family == AF_INET6){
+    tcpls_add_v6(con->tcpls->tls, (struct sockaddr_in6*)addr, 1, 0, 0);
   }
   if (syscall_no_intercept(SYS_getsockname, sd, (struct sockaddr *) &our_addr, &salen) < 0) {
     log_debug("getsockname(2) failed %d:%d", errno, sd);
   }
   if(our_addr.sa_family == AF_INET){
-    result = tcpls_add_v4(con->tcpls->tls, (struct sockaddr_in*)&our_addr, 0, 1, 1);
-    if(result)
-      return result;
+    tcpls_add_v4(con->tcpls->tls, (struct sockaddr_in*)&our_addr, 0, 0, 1);
   }
-  if(our_addr.sa_family == AF_INET6){
-    result = tcpls_add_v6(con->tcpls->tls, (struct sockaddr_in6*)&our_addr, 0, 1, 1);
-    if(result)
-      return result;
+  else if(our_addr.sa_family == AF_INET6){
+    tcpls_add_v6(con->tcpls->tls, (struct sockaddr_in6*)&our_addr, 0, 0, 1);
   }
   result = tcpls_accept(con->tcpls, sd, NULL, 0);
   if(result < 0)
@@ -380,7 +358,7 @@ int _tcpls_handshake(int sd, tcpls_t *tcpls){
   if(ptls_handshake_is_complete(tcpls->tls)){
     return 0;
   }
-  return  tcpls_do_handshake(sd, tcpls); 
+  return  tcpls_do_handshake(sd, tcpls);
 }
 
 static size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) {
@@ -430,18 +408,7 @@ size_t _tcpls_do_read(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) {
 
 
 size_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls){
-  size_t n;
-  int streamid;
-  if(!size)
-    return size;
-  if(tcpls->streams->size == 0)
-    streamid = 0;
-  else if((tcpls->streams->size == 1) && (tcpls->next_stream_id == 2147483649))
-    streamid = tcpls->streams->size;
-    else
-       streamid = 2147483649;
-  n = tcpls_send(tcpls->tls, streamid, buf, size);
-  //for(int i = 0; i < (int) n; i++)
-    //log_debug("%x",*(buf+i));
-  return n;
+  streamid_t *streamid;
+  streamid = list_get(cli_data.streamlist, 0);
+  return tcpls_send(tcpls->tls, *streamid, buf, size);
 }

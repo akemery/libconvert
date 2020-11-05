@@ -7,6 +7,8 @@
 #include <string.h>
 #include <syscall.h>
 #include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <picotls.h>
 #include <picotcpls.h>
@@ -16,20 +18,30 @@
 #include "convert_tcpls.h"
 
 static FILE *		_log;
+static int client_initialized = 0;
+
 
 static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result){
   struct sockaddr *dest	= (struct sockaddr *)arg1;
   int sd = (int)arg0, ret;
+  if (!client_initialized) {
+    _tcpls_init(0);
+    client_initialized = 1;
+  }
   _tcpls_alloc_con_info(sd, 0, dest->sa_family);
   struct tcpls_con *con;
   con = _tcpls_lookup(sd);
   assert(con);
   switch (dest->sa_family) {
     case AF_INET:
-    case AF_INET6:
-      //*result = syscall_no_intercept(SYS_connect, arg0, arg1, arg2);
-      *result = _handle_tcpls_connect(sd, dest, con->tcpls);
+    case AF_INET6: 
+      {
+        /*int flags = fcntl(sd, F_GETFL);*/
+        /*flags &= O_NONBLOCK;*/
+        /*fcntl(sd, F_SETFL, flags);*/
+        *result = _handle_tcpls_connect(sd, dest, con->tcpls);
         break;
+      }
     default:
       log_warn("sd %d specified an invalid address family %d", sd,
 		   dest->sa_family);
@@ -38,6 +50,7 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
     ret = _tcpls_handshake(sd, con->tcpls);
     if(ret != 0){
       log_warn("handshake failed %d:%d:%d", sd, *result, ret);
+      return SYSCALL_SKIP;
     }
     log_debug("TCPLS: Open connexion on %d handshake OK", sd);
     return SYSCALL_SKIP;
@@ -47,23 +60,24 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
 }
 
 static int _handle_read(long arg0, long arg1, long arg2, long *result){
-  struct tcpls_con *con;
   int sd = (int)arg0;
+  struct tcpls_con *con;
   uint8_t *buf = (uint8_t*)arg1;
   size_t size = (size_t)arg2;
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
-  *result = _tcpls_do_read(sd,buf, size, con->tcpls);
+  *result = _tcpls_do_read(sd, buf, size, con->tcpls);
   if(*result >= 0){
-    log_debug("TCPLS read on socket descriptor %d, %d bytes read", sd, *result);
+    log_debug("TCPLS read on socket descriptor :%d received :%d bytes", sd, *result);
     return SYSCALL_SKIP;
   }
-  log_warn("TCPLS read %d failed with error: %d", sd, *result);
-  return SYSCALL_RUN;
+  log_warn("TCPLS read on %d failed with error: %d", sd, *result);
+  return SYSCALL_SKIP;
 }
 
-static int _handle_recvfrom(long arg0, long arg1, long arg2,   UNUSED long arg3,  UNUSED long arg4, UNUSED  long arg5, long *result){
+static int _handle_recvfrom(long arg0, long arg1, long arg2, UNUSED long arg3,
+    UNUSED long arg4, UNUSED  long arg5, long *result){
   struct tcpls_con *con;
   int sd = (int)arg0;
   uint8_t * buf = (uint8_t *)arg1;
@@ -77,31 +91,13 @@ static int _handle_recvfrom(long arg0, long arg1, long arg2,   UNUSED long arg3,
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS recvfrom %d failed with error: %d", sd, *result);
-  return SYSCALL_RUN;
-}
-
-static int _handle_sendto(long arg0, long arg1, long arg2, UNUSED long arg3, UNUSED long arg4, UNUSED long arg5, long *result){
-  struct tcpls_con *con;
-  int sd = (int)arg0;
-  size_t size = (size_t)arg2; 
-  uint8_t * buff = (uint8_t *) arg1;
-  con = _tcpls_lookup(sd);
-  if(!con)
-    return SYSCALL_RUN;
-  log_debug("TCPLS sendto on %d\n", sd);
-  *result = _tcpls_do_send(buff, size, con->tcpls);
-  if(*result >= 0){
-    log_debug("TCPLS sendto on socket descriptor %d, %d bytes written", sd, *result);
-    return SYSCALL_SKIP;
-  }
-  log_warn("TCPLS sendto %d failed with error: %d", sd, *result);
-  return SYSCALL_RUN;
+  return SYSCALL_SKIP;
 }
 
 static int _handle_write(long arg0, long arg1, long arg2, long *result){
   int sd = (int)arg0;
   size_t size = (size_t)arg2; 
-  uint8_t * buff = (uint8_t *) arg1;
+  uint8_t *buff = (uint8_t *) arg1;
   struct tcpls_con *con;
   con = _tcpls_lookup(sd);
   if(!con)
@@ -113,8 +109,14 @@ static int _handle_write(long arg0, long arg1, long arg2, long *result){
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS write on %d failed with error: %d", sd, *result);
-  return SYSCALL_RUN;
+  return SYSCALL_SKIP;
 }
+
+static int _handle_sendto(long arg0, long arg1, long arg2, UNUSED long arg3,
+    UNUSED long arg4, UNUSED long arg5, long *result){
+  return _handle_write(arg0, arg1, arg2, result);
+}
+
 
 static int _handle_close(long arg0, long *result){
   int sd = (int)arg0;
@@ -122,16 +124,10 @@ static int _handle_close(long arg0, long *result){
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
-  if(_tcpls_free_con(sd)){
-      log_warn("not handled socket %d:%d failed\n", sd, *result);
-      return SYSCALL_RUN;
-  }
-  *result = syscall_no_intercept(SYS_close, arg0);
-  if(*result >= 0){
-    log_debug("connexion closed %d:%d", sd, *result);
-    return SYSCALL_SKIP;
-  }
-  log_debug("connexion closed %d:%d failed", sd, *result);
+  log_debug("App wants to close %d sending tcpls_close message", sd);
+  /** Close the stream if this is a graceful shutdown*/
+  //TODO
+  *result = 0;
   return SYSCALL_RUN;
 }
 

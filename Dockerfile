@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-wheel \
     tcpdump \
     uncrustify \
+    valgrind \
     vim \
     wget
 

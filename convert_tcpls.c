@@ -28,16 +28,18 @@ static struct cli_data cli_data;
 static list_t *tcpls_con_l = NULL;
 static list_t *ours_addr_list = NULL;
 
-static int handle_mpjoin(int socket, uint8_t *connid, uint8_t *cookie, uint32_t transportid, void *cbdata) ;
-static int handle_connection_event(tcpls_event_t event, int socket, int transportid, void *cbdata) ;
-static int handle_stream_event(tcpls_t *tcpls, tcpls_event_t event,
-    streamid_t streamid, int transportid, void *cbdata);
-static int handle_client_connection_event(tcpls_event_t event, int socket, int transportid, void *cbdata) ;
-static int handle_client_stream_event(tcpls_t *tcpls, tcpls_event_t event, streamid_t streamid,
-    int transportid, void *cbdata);
+static int handle_mpjoin(int socket, uint8_t *connid, uint8_t *cookie, uint32_t
+    transportid, void *cbdata);
+static int handle_connection_event(tcpls_event_t event, int socket, int transportid, void
+    *cbdata);
+static int handle_stream_event(tcpls_t *tcpls, tcpls_event_t
+      event, streamid_t streamid, int transportid, void *cbdata);
+static int handle_client_connection_event(tcpls_event_t event, int socket, int
+        transportid, void *cbdata);
+static int handle_client_stream_event(tcpls_t *tcpls, tcpls_event_t event, streamid_t
+        streamid, int transportid, void *cbdata);
 
-static void shift_buffer(ptls_buffer_t *buf, size_t delta)
-{
+static void shift_buffer(ptls_buffer_t *buf, size_t delta) {
   if (delta != 0) {
     assert(delta <= buf->off);
     if (delta != buf->off)
@@ -46,7 +48,10 @@ static void shift_buffer(ptls_buffer_t *buf, size_t delta)
   }
 }
 
-static int handle_connection_event(tcpls_event_t event, int socket, int transportid, void *cbdata) {
+/*************************EVENT CALLBACKS**********************/
+
+static int handle_connection_event(tcpls_event_t event, int socket, int
+    transportid, void *cbdata) {
   list_t *conntcpls = (list_t*) cbdata;
   struct tcpls_con *con;
   if(!conntcpls){
@@ -80,32 +85,38 @@ static int handle_connection_event(tcpls_event_t event, int socket, int transpor
   return 0;
 }
 
-static int handle_client_connection_event(tcpls_event_t event, int socket, int transportid, void *cbdata) {
+static int handle_client_connection_event(tcpls_event_t event, int socket, int
+    transportid, void *cbdata) {
   struct cli_data *data = (struct cli_data*) cbdata;
   switch (event) {
     case CONN_CLOSED:
-      log_debug("connection_event_call_back: Received a CONN_CLOSED; removing the socket %d transportid %d", socket, transportid);
+      log_debug("connection_event_call_back: Received a CONN_CLOSED; removing\
+          the socket %d transportid %d", socket, transportid);
       list_remove(data->socklist, &socket); 
       break;
     case CONN_OPENED:
-      log_debug("connection_event_call_back: Received a CONN_OPENED; adding the socket descriptor %d transport id %d", socket, transportid);
+      log_debug("connection_event_call_back: Received a CONN_OPENED; adding the\
+          socket descriptor %d transport id %d", socket, transportid);
       list_add(data->socklist, &socket);
       break;
     default: break;
   }
   return 0;
 }
-    
+
+
 static int handle_client_stream_event(tcpls_t *tcpls, tcpls_event_t event, streamid_t streamid,
     int transportid, void *cbdata) {
   struct cli_data *data = (struct cli_data*) cbdata;
   switch (event) {
     case STREAM_OPENED:
-      log_debug("stream_event_call_back: Handling stream_opened callback transportid :%d:%p", transportid, tcpls);
+      log_debug("stream_event_call_back: Handling stream_opened callback\
+          transportid :%d:%p", transportid, tcpls);
       list_add(data->streamlist, &streamid);
       break;
     case STREAM_CLOSED:
-      log_debug("stream_event_call_back: Handling stream_closed callback %d:%p", transportid, tcpls);
+      log_debug("stream_event_call_back: Handling stream_closed callback %d:%p",
+          transportid, tcpls);
       list_remove(data->streamlist, &streamid);
       break;
     default: break;
@@ -120,7 +131,8 @@ static int handle_stream_event(tcpls_t *tcpls, tcpls_event_t event,
   assert(conntcpls);
   switch(event){
     case STREAM_OPENED:
-      log_debug("stream_event_call_back: STREAM OPENED streamid :%d transportid :%d", streamid, transportid);
+      log_debug("stream_event_call_back: STREAM OPENED streamid :%d transportid\
+          :%d", streamid, transportid);
       for (int i = 0; i < conntcpls->size; i++) {
         con = list_get(conntcpls, i);
         if (con->tcpls == tcpls && con->transportid == transportid) {
@@ -131,11 +143,13 @@ static int handle_stream_event(tcpls_t *tcpls, tcpls_event_t event,
       }
       break;
     case STREAM_CLOSED:
-      log_debug("stream_event_call_back: STREAM CLOSED streamid :%d transportid :%d", streamid, transportid);
+      log_debug("stream_event_call_back: STREAM CLOSED streamid :%d transportid\
+          :%d", streamid, transportid);
       for (int i = 0; i < conntcpls->size; i++) {
         con = list_get(conntcpls, i);
         if ( con->tcpls == tcpls && con->transportid == transportid) {
-          log_debug("We're stopping to write on the connection linked to transportid %d %d\n", transportid, con->sd);
+          log_debug("We're stopping to write on the connection linked to\
+              transportid %d %d\n", transportid, con->sd);
           con->is_primary = 0;
           con->wants_to_write = 0;
         }
@@ -153,27 +167,27 @@ static int load_private_key(ptls_context_t *ctx, const char *fn){
   EVP_PKEY *pkey;
   if ((fp = fopen(fn, "rb")) == NULL) {
     log_debug("failed to open file:%s:%s\n", fn, strerror(errno));
-    return(-1);
+    return -1;
   }
   pkey = PEM_read_PrivateKey(fp, NULL, NULL, NULL);
   fclose(fp);
   if (pkey == NULL) {
     log_debug("failed to read private key from file:%s\n", fn);
-    return(-1);
+    return -1;
   }
   ptls_openssl_init_sign_certificate(&sc, pkey);
   EVP_PKEY_free(pkey);
   ctx->sign_certificate = &sc.super;
-  return(0);
+  return 0;
 }
 
 static ptls_context_t *set_tcpls_ctx_options(int is_server){
   if(ctx)
     goto done;
-  ERR_load_crypto_strings();
-  OpenSSL_add_all_algorithms();
+  /*ERR_load_crypto_strings();*/
+  /*OpenSSL_add_all_algorithms();*/
   ctx = (ptls_context_t *)malloc(sizeof(*ctx));
-  memset(ctx, 0, sizeof(ptls_context_t));  
+  memset(ctx, 0, sizeof(ptls_context_t));
   ctx->support_tcpls_options = 1;
   ctx->random_bytes = ptls_openssl_random_bytes;
   ctx->key_exchanges = ptls_openssl_key_exchanges;
@@ -193,7 +207,7 @@ static ptls_context_t *set_tcpls_ctx_options(int is_server){
     ctx->stream_event_cb = &handle_client_stream_event;
     ctx->connection_event_cb = &handle_client_connection_event;
   }else{
-    ctx->stream_event_cb = &handle_stream_event;  
+    ctx->stream_event_cb = &handle_stream_event;
     ctx->connection_event_cb = &handle_connection_event;
     ctx->cb_data = tcpls_con_l;
     if (ptls_load_certificates(ctx, (char *)cert) != 0)
@@ -206,25 +220,30 @@ done:
 }
 
 
-static int handle_mpjoin(int socket, uint8_t *connid, uint8_t *cookie, uint32_t transportid, void *cbdata) {
+static int handle_mpjoin(int socket, uint8_t *connid, uint8_t *cookie, uint32_t
+    transportid, void *cbdata) {
   int i, j;
-  log_debug("\n\n\nstart mpjoin haha %d %d %d %d %p\n", socket, *connid, *cookie, transportid, cbdata);
+  log_debug("\n\n\nstart mpjoin haha %d %d %d %d %p\n", socket, *connid,
+      *cookie, transportid, cbdata);
   list_t *conntcpls = (list_t*) cbdata;
   struct tcpls_con *con, *con2;
   assert(conntcpls);
   for(i = 0; i<conntcpls->size; i++){
     con = list_get(conntcpls, i);
     if(!memcmp(con->tcpls->connid, connid, CONNID)){
-      log_debug("start mpjoin found %d:%p:%d\n", *con->tcpls->connid, con->tcpls, con->sd);
+      log_debug("start mpjoin found %d:%p:%d\n", *con->tcpls->connid,
+          con->tcpls, con->sd);
       for(j = 0; j < conntcpls->size; j++){
         con2 = list_get(conntcpls, j);
-        log_debug("start mpjoin 1 found %d:%p:%d\n", *con->tcpls->connid, con2->tcpls, con2->sd);
+        log_debug("start mpjoin 1 found %d:%p:%d\n", *con->tcpls->connid,
+            con2->tcpls, con2->sd);
         if(con2->sd == socket){
           con2->tcpls = con->tcpls;
           if(memcmp(con2->tcpls, con->tcpls, sizeof(tcpls_t)))
             log_debug("ils sont bien diff2rents\n");
         }
-        log_debug("start mpjoin 2 found %d:%p:%d\n", *con->tcpls->connid, con2->tcpls, con2->sd); 
+        log_debug("start mpjoin 2 found %d:%p:%d\n", *con->tcpls->connid,
+            con2->tcpls, con2->sd); 
       }
       return tcpls_accept(con->tcpls, socket, cookie, transportid);
     }
@@ -238,8 +257,6 @@ static int tcpls_do_handshake(int sd, tcpls_t *tcpls){
   prop.socket = sd;
   prop.received_mpjoin_to_process = &handle_mpjoin;
   if ((result = tcpls_handshake(tcpls->tls, &prop)) != 0) {
-    if (result == PTLS_ERROR_HANDSHAKE_IS_MPJOIN) 
-      return result;
     log_warn("tcpls_handshake failed with ret (%d)\n", result);
   }
   /* if the hanshake succeeds, we'll need a buffer for recv/read */
@@ -269,7 +286,9 @@ struct tcpls_con * _tcpls_alloc_con_info(int sd, int is_server, int af_family){
 
 struct tcpls_con *_tcpls_lookup(int sd){
   struct tcpls_con * con;
-  if(!tcpls_con_l || !tcpls_con_l->size)
+  if (!tcpls_con_l)
+    return NULL;
+  if (!tcpls_con_l->size)
     return NULL;
   for(int i = 0; i < tcpls_con_l->size; i++){
     con = list_get(tcpls_con_l, i);
@@ -332,7 +351,7 @@ int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
   else if(addr->sa_family == AF_INET6){
     tcpls_add_v6(con->tcpls->tls, (struct sockaddr_in6*)addr, 1, 0, 0);
   }
-  if (syscall_no_intercept(SYS_getsockname, sd, (struct sockaddr *) &our_addr, &salen) < 0) {
+  if (syscall_no_intercept(SYS_getsockname, sd, (struct sockaddr *) &our_addr, &salen) < -1) {
     log_debug("getsockname(2) failed %d:%d", errno, sd);
   }
   if(our_addr.sa_family == AF_INET){
@@ -408,7 +427,11 @@ size_t _tcpls_do_read(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) {
 
 
 size_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls){
-  streamid_t *streamid;
-  streamid = list_get(cli_data.streamlist, 0);
-  return tcpls_send(tcpls->tls, *streamid, buf, size);
+  streamid_t streamid;
+  if (cli_data.streamlist->size > 0) {
+    streamid = *((streamid_t*) list_get(cli_data.streamlist, 0));
+  }
+  else
+    streamid = 0;
+  return tcpls_send(tcpls->tls, streamid, buf, size);
 }

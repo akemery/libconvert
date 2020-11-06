@@ -13,6 +13,9 @@
 #include "convert_util.h"
 #include "convert_tcpls.h"
 
+#include <unistd.h>
+#include <fcntl.h>
+
 const char * cert = "../assets/server.crt";
 const char * cert_key = "../assets/server.key";
 
@@ -47,6 +50,21 @@ static void shift_buffer(ptls_buffer_t *buf, size_t delta) {
     buf->off -= delta;
   }
 }
+
+
+int set_blocking_mode(int socket, bool is_blocking)
+{
+    int ret = 0;
+    const int flags = fcntl(socket, F_GETFL, 0);
+    if ((flags & O_NONBLOCK) && !is_blocking) {
+      log_info("set_blocking_mode(): socket was already in non-blocking mode");
+      return ret; }
+    if (!(flags & O_NONBLOCK) && is_blocking) { 
+      log_info("set_blocking_mode(): socket was already in blocking mode");
+      return ret; }
+    return !fcntl(socket, F_SETFL, is_blocking ? flags ^ O_NONBLOCK : flags | O_NONBLOCK);
+}
+
 
 /*************************EVENT CALLBACKS**********************/
 
@@ -386,27 +404,32 @@ static size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) 
   if (tcpls_buf.off-tcpls_buf_read_offset >= size) {
     memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset, size);
     tcpls_buf_read_offset += size;
-    if (tcpls_buf_read_offset >= 0.9 * TCPLS_BUFFER_SIZE)
+    if (tcpls_buf_read_offset >= 0.9 * TCPLS_BUFFER_SIZE) {
       shift_buffer(&tcpls_buf, tcpls_buf_read_offset);
+      tcpls_buf_read_offset = 0;
+    }
     return size;
   }
   else{
-    while ((ret = tcpls_receive(tcpls->tls, &tcpls_buf, &timeout)) == TCPLS_HOLD_DATA_TO_READ)
+    while (((ret = tcpls_receive(tcpls->tls, &tcpls_buf, &timeout)) == TCPLS_HOLD_DATA_TO_READ) ||
+        (ret == TCPLS_OK && tcpls_buf.off-tcpls_buf_read_offset == 0))
       ;
     if (ret == TCPLS_OK) {
       if (tcpls_buf.off-tcpls_buf_read_offset >= size) {
         memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset, size);
         tcpls_buf_read_offset += size;
-        if (tcpls_buf_read_offset >= 0.9 * TCPLS_BUFFER_SIZE)
+        if (tcpls_buf_read_offset >= 0.9 * TCPLS_BUFFER_SIZE) {
           shift_buffer(&tcpls_buf, tcpls_buf_read_offset);
+          tcpls_buf_read_offset = 0;
+        }
         return size;
       }
       else {
         memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset,
             tcpls_buf.off-tcpls_buf_read_offset);
-        tcpls_buf_read_offset = 0;
-        tcpls_buf.off = 0;
-        return tcpls_buf.off-tcpls_buf_read_offset;
+        ret = tcpls_buf.off-tcpls_buf_read_offset;
+        tcpls_buf.off -= ret;
+        return ret;
       }
 
     }
@@ -427,11 +450,18 @@ size_t _tcpls_do_read(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) {
 
 
 size_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls){
-  streamid_t streamid;
-  if (cli_data.streamlist->size > 0) {
-    streamid = *((streamid_t*) list_get(cli_data.streamlist, 0));
+  streamid_t streamid = 0;
+  if (tcpls->tls->is_server) {
+     struct tcpls_con *con = list_get(tcpls_con_l, 0);
+     if (con)
+       streamid = con->streamid;
   }
-  else
-    streamid = 0;
+  else {
+    if (cli_data.streamlist->size > 0) {
+      streamid = *((streamid_t*) list_get(cli_data.streamlist, 0));
+    }
+    else
+      streamid = 0;
+  }
   return tcpls_send(tcpls->tls, streamid, buf, size);
 }

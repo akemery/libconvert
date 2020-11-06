@@ -7,8 +7,6 @@
 #include <string.h>
 #include <syscall.h>
 #include <arpa/inet.h>
-#include <unistd.h>
-#include <fcntl.h>
 
 #include <picotls.h>
 #include <picotcpls.h>
@@ -67,30 +65,16 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
+  int switchback;
+  switchback = set_blocking_mode(sd, 1);
   *result = _tcpls_do_read(sd, buf, size, con->tcpls);
+  if (switchback)
+    set_blocking_mode(sd, 0);
   if(*result >= 0){
     log_debug("TCPLS read on socket descriptor :%d received :%d bytes", sd, *result);
     return SYSCALL_SKIP;
   }
   log_warn("TCPLS read on %d failed with error: %d", sd, *result);
-  return SYSCALL_SKIP;
-}
-
-static int _handle_recvfrom(long arg0, long arg1, long arg2, UNUSED long arg3,
-    UNUSED long arg4, UNUSED  long arg5, long *result){
-  struct tcpls_con *con;
-  int sd = (int)arg0;
-  uint8_t * buf = (uint8_t *)arg1;
-  size_t size = (size_t)arg2;
-  con = _tcpls_lookup(sd);
-  if(!con)
-    return SYSCALL_RUN;
-  *result = _tcpls_do_recvfrom(sd, buf, size, con->tcpls);
-  if(*result >= 0){
-    log_debug("TCPLS recvfrom on socket %d, %d bytes received expected %d bytes", sd, *result, size);
-    return SYSCALL_SKIP;
-  }
-  log_warn("TCPLS recvfrom %d failed with error: %d", sd, *result);
   return SYSCALL_SKIP;
 }
 
@@ -103,7 +87,11 @@ static int _handle_write(long arg0, long arg1, long arg2, long *result){
   if(!con)
     return SYSCALL_RUN;
   //*result = syscall_no_intercept(SYS_write, arg0, arg1, arg2);
+  int switchback;
+  switchback = set_blocking_mode(sd, 1);
   *result = _tcpls_do_send(buff, size, con->tcpls);
+  if (switchback)
+    set_blocking_mode(sd, 0);
   if(*result >= 0){
     log_debug("TCPLS write on socket descriptor %d, %d bytes written", sd, *result);
     return SYSCALL_SKIP;
@@ -139,9 +127,8 @@ _hook(long syscall_number, long arg0, long arg1, long arg2, long UNUSED arg3,
     case SYS_connect:
       return _handle_connect(arg0, arg1,  arg2, result);
     case SYS_read:
-      return _handle_read(arg0, arg1,arg2, result);
     case SYS_recvfrom:
-      return _handle_recvfrom(arg0, arg1, arg2, arg3, arg4, arg5, result);
+      return _handle_read(arg0, arg1,arg2, result);
     case SYS_close:
       return _handle_close(arg0, result);
     case SYS_sendto:

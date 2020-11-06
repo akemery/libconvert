@@ -83,7 +83,11 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
     log_debug("No tcpls con linked to socket %d", sd);
     return SYSCALL_RUN;
   }
+  int switchback;
+  switchback = set_blocking_mode(sd, 1);
   *result = _tcpls_do_read(sd, buf, size, con->tcpls);
+  if (switchback)
+    set_blocking_mode(sd, 0);
   if(*result >= 0){
     log_debug("TCPLS read on socket descriptor :%d received :%d bytes", sd, *result);
     return SYSCALL_SKIP;
@@ -180,8 +184,8 @@ _hook(long syscall_number, long arg0, long arg1,  long arg2, long  arg3,
     case SYS_accept4:
       return _handle_accept(arg0, arg1, arg2, arg3, result);
     case SYS_read:
+    case SYS_recvfrom:
       return _handle_read(arg0, arg1, arg2, result);
-
     case SYS_writev:
       return _handle_writev(arg0, arg1, arg2, result);
     case SYS_write:

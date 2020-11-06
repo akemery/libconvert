@@ -6,8 +6,8 @@ int _tcpls_set_ours_addr(struct sockaddr *addr);
 int _handle_tcpls_connect(int sd, struct sockaddr * dest, tcpls_t *tcpls);
 int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr);
 int _tcpls_handshake(int sd, tcpls_t *tcpls);
-size_t _tcpls_do_read(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls);
-size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, tcpls_t * tcpls);
+size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcpls);
+size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, int flags, tcpls_t * tcpls);
 size_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls);
 int set_blocking_mode(int socket, bool is_blocking);
 

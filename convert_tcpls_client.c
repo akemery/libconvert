@@ -57,17 +57,18 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
   return SYSCALL_SKIP;
 }
 
-static int _handle_read(long arg0, long arg1, long arg2, long *result){
+static int _handle_recv(long arg0, long arg1, long arg2, long arg3, long *result){
   int sd = (int)arg0;
   struct tcpls_con *con;
   uint8_t *buf = (uint8_t*)arg1;
   size_t size = (size_t)arg2;
+  int flags = (int) arg3;
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
   int switchback;
   switchback = set_blocking_mode(sd, 1);
-  *result = _tcpls_do_read(sd, buf, size, con->tcpls);
+  *result = _tcpls_do_recv(sd, buf, size, flags, con->tcpls);
   if (switchback)
     set_blocking_mode(sd, 0);
   if(*result >= 0){
@@ -128,7 +129,7 @@ _hook(long syscall_number, long arg0, long arg1, long arg2, long UNUSED arg3,
       return _handle_connect(arg0, arg1,  arg2, result);
     case SYS_read:
     case SYS_recvfrom:
-      return _handle_read(arg0, arg1,arg2, result);
+      return _handle_recv(arg0, arg1,arg2, arg3, result);
     case SYS_close:
       return _handle_close(arg0, result);
     case SYS_sendto:

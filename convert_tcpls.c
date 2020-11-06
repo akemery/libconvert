@@ -398,12 +398,13 @@ int _tcpls_handshake(int sd, tcpls_t *tcpls){
   return  tcpls_do_handshake(sd, tcpls);
 }
 
-static size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) {
+size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcpls) {
   int ret = 0;
   struct timeval timeout = {.tv_sec = 2, .tv_usec = 0};
   if (tcpls_buf.off-tcpls_buf_read_offset >= size) {
     memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset, size);
-    tcpls_buf_read_offset += size;
+    if (flags != MSG_PEEK)
+      tcpls_buf_read_offset += size;
     if (tcpls_buf_read_offset >= 0.9 * TCPLS_BUFFER_SIZE) {
       shift_buffer(&tcpls_buf, tcpls_buf_read_offset);
       tcpls_buf_read_offset = 0;
@@ -417,7 +418,8 @@ static size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) 
     if (ret == TCPLS_OK) {
       if (tcpls_buf.off-tcpls_buf_read_offset >= size) {
         memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset, size);
-        tcpls_buf_read_offset += size;
+        if (flags != MSG_PEEK)
+          tcpls_buf_read_offset += size;
         if (tcpls_buf_read_offset >= 0.9 * TCPLS_BUFFER_SIZE) {
           shift_buffer(&tcpls_buf, tcpls_buf_read_offset);
           tcpls_buf_read_offset = 0;
@@ -428,7 +430,8 @@ static size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) 
         memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset,
             tcpls_buf.off-tcpls_buf_read_offset);
         ret = tcpls_buf.off-tcpls_buf_read_offset;
-        tcpls_buf.off -= ret;
+        if (flags != MSG_PEEK)
+          tcpls_buf.off -= ret;
         return ret;
       }
 
@@ -440,14 +443,9 @@ static size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) 
   }
 }
 
-size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) {
-  return _tcpls_do_recv(sd, buf, size, tcpls);
+size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcpls) {
+  return _tcpls_do_recv(sd, buf, size, flags, tcpls);
 }
-
-size_t _tcpls_do_read(int sd, uint8_t *buf, size_t size, tcpls_t *tcpls) {
-  return _tcpls_do_recv(sd, buf, size, tcpls);
-}
-
 
 size_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls){
   streamid_t streamid = 0;

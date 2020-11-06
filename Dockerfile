@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gdb \
     git \
     libcapstone-dev \
+    libgnutls28-dev \
     libscope-guard-perl \
     libssl-dev \
     libtest-tcp-perl \

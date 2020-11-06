@@ -53,14 +53,18 @@ static void shift_buffer(ptls_buffer_t *buf, size_t delta) {
 int set_blocking_mode(int socket, bool is_blocking)
 {
     int ret = 0;
-    const int flags = fcntl(socket, F_GETFL, 0);
+    int flags = fcntl(socket, F_GETFL, 0);
     if ((flags & O_NONBLOCK) && !is_blocking) {
       log_debug("set_blocking_mode(): socket was already in non-blocking mode");
-      return ret; }
+      return ret;
+    }
     if (!(flags & O_NONBLOCK) && is_blocking) {
       log_debug("set_blocking_mode(): socket was already in blocking mode");
-      return ret; }
-    return !fcntl(socket, F_SETFL, is_blocking ? flags ^ O_NONBLOCK : flags | O_NONBLOCK);
+      return ret;
+    }
+   if (flags == -1) return 0;
+   flags = is_blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
+   return !fcntl(socket, F_SETFL, flags);
 }
 
 

@@ -31,8 +31,6 @@ static struct cli_data cli_data;
 static list_t *tcpls_con_l = NULL;
 static list_t *ours_addr_list = NULL;
 
-static int handle_mpjoin(int socket, uint8_t *connid, uint8_t *cookie, uint32_t
-    transportid, void *cbdata);
 static int handle_connection_event(tcpls_event_t event, int socket, int transportid, void
     *cbdata);
 static int handle_stream_event(tcpls_t *tcpls, tcpls_event_t
@@ -237,43 +235,10 @@ done:
   return ctx;
 }
 
-
-static int handle_mpjoin(int socket, uint8_t *connid, uint8_t *cookie, uint32_t
-    transportid, void *cbdata) {
-  int i, j;
-  log_debug("\n\n\nstart mpjoin haha %d %d %d %d %p\n", socket, *connid,
-      *cookie, transportid, cbdata);
-  list_t *conntcpls = (list_t*) cbdata;
-  struct tcpls_con *con, *con2;
-  assert(conntcpls);
-  for(i = 0; i<conntcpls->size; i++){
-    con = list_get(conntcpls, i);
-    if(!memcmp(con->tcpls->connid, connid, CONNID)){
-      log_debug("start mpjoin found %d:%p:%d\n", *con->tcpls->connid,
-          con->tcpls, con->sd);
-      for(j = 0; j < conntcpls->size; j++){
-        con2 = list_get(conntcpls, j);
-        log_debug("start mpjoin 1 found %d:%p:%d\n", *con->tcpls->connid,
-            con2->tcpls, con2->sd);
-        if(con2->sd == socket){
-          con2->tcpls = con->tcpls;
-          if(memcmp(con2->tcpls, con->tcpls, sizeof(tcpls_t)))
-            log_debug("ils sont bien diff2rents\n");
-        }
-        log_debug("start mpjoin 2 found %d:%p:%d\n", *con->tcpls->connid,
-            con2->tcpls, con2->sd); 
-      }
-      return tcpls_accept(con->tcpls, socket, cookie, transportid);
-    }
-  }
-  return -1;
-}
-
 static int tcpls_do_handshake(int sd, tcpls_t *tcpls){
   int result = -1;
   ptls_handshake_properties_t prop = {NULL};
   prop.socket = sd;
-  prop.received_mpjoin_to_process = &handle_mpjoin;
   if ((result = tcpls_handshake(tcpls->tls, &prop)) != 0) {
     log_debug("tcpls_handshake failed with ret (%d)\n", result);
   }

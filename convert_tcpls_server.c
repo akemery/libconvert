@@ -120,8 +120,8 @@ static int _handle_writev(long arg0, long arg1, long arg2, long *result){
   iter_counter:%d",iov_base, iov_len, nbytes_sent, *result, n, i);
     }
     else {
-      log_debug("TCPLS end writev and wrote %d bytes socket descriptor:%d, but has\
-          been interrupted", *result, sd);
+      log_debug("TCPLS end writev and wrote %d bytes socket descriptor:%d, but\
+          cannot send more at the moment", *result, sd);
       return SYSCALL_SKIP;
     }
 

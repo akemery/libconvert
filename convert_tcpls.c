@@ -57,10 +57,10 @@ int set_blocking_mode(int socket, bool is_blocking)
     int ret = 0;
     const int flags = fcntl(socket, F_GETFL, 0);
     if ((flags & O_NONBLOCK) && !is_blocking) {
-      log_info("set_blocking_mode(): socket was already in non-blocking mode");
+      log_debug("set_blocking_mode(): socket was already in non-blocking mode");
       return ret; }
-    if (!(flags & O_NONBLOCK) && is_blocking) { 
-      log_info("set_blocking_mode(): socket was already in blocking mode");
+    if (!(flags & O_NONBLOCK) && is_blocking) {
+      log_debug("set_blocking_mode(): socket was already in blocking mode");
       return ret; }
     return !fcntl(socket, F_SETFL, is_blocking ? flags ^ O_NONBLOCK : flags | O_NONBLOCK);
 }
@@ -275,7 +275,7 @@ static int tcpls_do_handshake(int sd, tcpls_t *tcpls){
   prop.socket = sd;
   prop.received_mpjoin_to_process = &handle_mpjoin;
   if ((result = tcpls_handshake(tcpls->tls, &prop)) != 0) {
-    log_warn("tcpls_handshake failed with ret (%d)\n", result);
+    log_debug("tcpls_handshake failed with ret (%d)\n", result);
   }
   /* if the hanshake succeeds, we'll need a buffer for recv/read */
   ptls_buffer_init(&tcpls_buf, "", 0);
@@ -360,7 +360,7 @@ int _tcpls_do_tcpls_accept(int sd, struct sockaddr *addr){
   socklen_t salen = sizeof(struct sockaddr);
   con = _tcpls_alloc_con_info(sd, 1, addr->sa_family);
   if(!con){
-    log_warn("failed to alloc con %d", sd);
+    log_debug("failed to alloc con %d", sd);
     return result;
   }
   if(addr->sa_family == AF_INET){

@@ -41,19 +41,19 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
         break;
       }
     default:
-      log_warn("sd %d specified an invalid address family %d", sd,
+      log_debug("sd %d specified an invalid address family %d", sd,
 		   dest->sa_family);
   }
   if (*result >= 0) {
     ret = _tcpls_handshake(sd, con->tcpls);
     if(ret != 0){
-      log_warn("handshake failed %d:%d:%d", sd, *result, ret);
+      log_debug("handshake failed %d:%d:%d", sd, *result, ret);
       return SYSCALL_SKIP;
     }
     log_debug("TCPLS: Open connexion on %d handshake OK", sd);
     return SYSCALL_SKIP;
   }
-  log_warn("TCPLS connexion %d failed with error: %d", sd, *result);
+  log_debug("TCPLS connexion %d failed with error: %d", sd, *result);
   return SYSCALL_SKIP;
 }
 
@@ -74,7 +74,7 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
     log_debug("TCPLS read on socket descriptor :%d received :%d bytes", sd, *result);
     return SYSCALL_SKIP;
   }
-  log_warn("TCPLS read on %d failed with error: %d", sd, *result);
+  log_debug("TCPLS read on %d failed with error: %d", sd, *result);
   return SYSCALL_SKIP;
 }
 
@@ -96,7 +96,7 @@ static int _handle_write(long arg0, long arg1, long arg2, long *result){
     log_debug("TCPLS write on socket descriptor %d, %d bytes written", sd, *result);
     return SYSCALL_SKIP;
   }
-  log_warn("TCPLS write on %d failed with error: %d", sd, *result);
+  log_debug("TCPLS write on %d failed with error: %d", sd, *result);
   return SYSCALL_SKIP;
 }
 
@@ -153,13 +153,13 @@ static __attribute__((constructor)) void init(void) {
     log_add_fp(_log, LOG_DEBUG);
     /*log_set_fp(_log);*/
   }
-  log_info("Starting interception");
+  log_debug("Starting interception");
   /* Set up the callback function */
     intercept_hook_point = _hook;
 }
 
 static __attribute__((destructor)) void fini(void){
-  log_info("Terminating interception");
+  log_debug("Terminating interception");
   if (_log)
     fclose(_log);
 }

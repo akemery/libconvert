@@ -25,13 +25,13 @@ static int _handle_bind(long arg0, long arg1, long arg2, long *result){
   int sd = (int)arg0;
   *result = syscall_no_intercept(SYS_bind, arg0, arg1, arg2);
   if (*result != 0)
-     log_warn("TCPLS binding on %d failed with error: %d", sd, *result);
+     log_debug("TCPLS binding on %d failed with error: %d", sd, *result);
   return SYSCALL_SKIP;
 }
 
 static int _handle_listen(long arg0, long arg1, long *result){
   int sd = (int)arg0;
-  log_info("TCPLS listen");
+  log_debug("TCPLS listen");
   if (!server_initialized) {
     _tcpls_init(1);
     server_initialized = 1;
@@ -54,7 +54,7 @@ static int _handle_accept(long arg0, long arg1, long arg2, long arg3, long *resu
   if(*result >= 0){
     ret = _tcpls_do_tcpls_accept(*result, (struct sockaddr *)arg1);
     if(ret){
-      log_warn("TCPLS: tcpls_accept returns %d state for socket %d", ret, *result);
+      log_debug("TCPLS: tcpls_accept returns %d state for socket %d", ret, *result);
       return SYSCALL_SKIP;
     }
     con = _tcpls_lookup(*result);
@@ -69,7 +69,7 @@ static int _handle_accept(long arg0, long arg1, long arg2, long arg3, long *resu
     }
     return SYSCALL_SKIP;
   }
-  log_warn("TCPLS accept on %d failed with error: %d", sd, *result);
+  log_debug("TCPLS accept on %d failed with error: %d", sd, *result);
   return SYSCALL_SKIP;
 }
 
@@ -92,7 +92,7 @@ static int _handle_read(long arg0, long arg1, long arg2, long *result){
     log_debug("TCPLS read on socket descriptor :%d received :%d bytes", sd, *result);
     return SYSCALL_SKIP;
   }
-  log_warn("TCPLS read on %d failed with error: %d", sd, *result);
+  log_debug("TCPLS read on %d failed with error: %d", sd, *result);
   return SYSCALL_SKIP;
 }
 
@@ -213,12 +213,12 @@ static __attribute__((constructor)) void init(void) {
     log_add_fp(_log, LOG_DEBUG);
     /*log_set_fp(_log);*/
   }
-  log_info("Starting interception");
+  log_debug("Starting interception");
   intercept_hook_point = _hook;
 }
 
 static __attribute__((destructor)) void fini(void){
-  log_info("Terminating interception");
+  log_debug("Terminating interception");
   if (_log)
     fclose(_log);
 }

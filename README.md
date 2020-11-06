@@ -55,22 +55,18 @@ Assuming the server has the address 172.17.0.2 and the client has the address 17
 Client side:
 ```
 # cd lc/build
-# CONVERT_LOG=./client_converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_client.so wget http://172.17.0.2
-# CONVERT_LOG=./client_converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_client.so /usr/local/apache2/bin/ab -n 100 -c 10 http://172.17.0.2/
+# CONVERT_LOG=./client_converter.log LD_PRELOAD=./libconvert_tcpls_client.so wget http://172.17.0.2
+# CONVERT_LOG=./client_converter.log LD_PRELOAD=./libconvert_tcpls_client.so /usr/local/apache2/bin/ab -n 100 -c 10 http://172.17.0.2/
 ```
 Server side: 
 ```
 # cd lc/build
-# CONVERT_LOG=./server_converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_server.so /usr/local/apache2/bin/apachectl -k start 
+# CONVERT_LOG=./server_converter.log LD_PRELOAD=./libconvert_tcpls_server.so /usr/local/apache2/bin/httpd -X
 ```
 
 The library supports IPv6 as well.
 
 Currently tested with `curl`, `wget` and `apache2` Ubuntu {19}.
-
-The library is known to *not* work on Ubuntu 20 due to incompatibilities between `lib_syscall_intercept` and `libc 20.30-1`. This issue is tracked [here](https://github.com/pmem/syscall_intercept/issues/97).
-
-
 
 ### Contact
 

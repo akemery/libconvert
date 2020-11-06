@@ -34,10 +34,11 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
     case AF_INET:
     case AF_INET6: 
       {
-        /*int flags = fcntl(sd, F_GETFL);*/
-        /*flags &= O_NONBLOCK;*/
-        /*fcntl(sd, F_SETFL, flags);*/
+        int switchback;
+        switchback = set_blocking_mode(sd, 0);
         *result = _handle_tcpls_connect(sd, dest, con->tcpls);
+        if (switchback)
+          set_blocking_mode(sd, 1);
         break;
       }
     default:

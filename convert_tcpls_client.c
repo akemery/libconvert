@@ -34,11 +34,11 @@ static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result
     case AF_INET:
     case AF_INET6: 
       {
-        int switchback;
-        switchback = set_blocking_mode(sd, 0);
+        /*int switchback;*/
+        /*switchback = set_blocking_mode(sd, 0);*/
         *result = _handle_tcpls_connect(sd, dest, con->tcpls);
-        if (switchback)
-          set_blocking_mode(sd, 1);
+        /*if (switchback)*/
+          /*set_blocking_mode(sd, 1);*/
         break;
       }
     default:
@@ -67,11 +67,11 @@ static int _handle_recv(long arg0, long arg1, long arg2, long arg3, long *result
   con = _tcpls_lookup(sd);
   if(!con)
     return SYSCALL_RUN;
-  int switchback;
-  switchback = set_blocking_mode(sd, 1);
+  /*int switchback;*/
+  /*switchback = set_blocking_mode(sd, 1);*/
   *result = _tcpls_do_recv(sd, buf, size, flags, con->tcpls);
-  if (switchback)
-    set_blocking_mode(sd, 0);
+  /*if (switchback)*/
+    /*set_blocking_mode(sd, 0);*/
   if(*result >= 0){
     log_debug("TCPLS read on socket descriptor :%d received :%d bytes", sd, *result);
     return SYSCALL_SKIP;

@@ -60,7 +60,11 @@ static int _handle_accept(long arg0, long arg1, long arg2, long arg3, long *resu
     con = _tcpls_lookup(*result);
     assert(con);
     log_debug("TCPLS: starting handshaking");
+    int switchback;
+    switchback = set_blocking_mode(sd, 1);
     ret = _tcpls_handshake(*result, con->tcpls);
+    if (switchback)
+      set_blocking_mode(sd, 0);
     if (!ret) {
       log_debug("TCPLS: Handshake OK");
     }
@@ -84,11 +88,11 @@ static int _handle_recv(long arg0, long arg1, long arg2, long arg3, long *result
     log_debug("No tcpls con linked to socket %d", sd);
     return SYSCALL_RUN;
   }
-  int switchback;
-  switchback = set_blocking_mode(sd, 1);
+  /*int switchback;*/
+  /*switchback = set_blocking_mode(sd, 1);*/
   *result = _tcpls_do_recv(sd, buf, size, flags, con->tcpls);
-  if (switchback)
-    set_blocking_mode(sd, 0);
+  /*if (switchback)*/
+    /*set_blocking_mode(sd, 0);*/
   if(*result >= 0){
     log_debug("TCPLS read on socket descriptor :%d received :%d bytes", sd, *result);
     return SYSCALL_SKIP;
@@ -100,7 +104,7 @@ static int _handle_recv(long arg0, long arg1, long arg2, long arg3, long *result
 static int _handle_writev(long arg0, long arg1, long arg2, long *result){
   int sd = (int)arg0;
   int n = (int)arg2, i;
-  size_t nbytes_sent;
+  ssize_t nbytes_sent;
   struct tcpls_con *con;
   con = _tcpls_lookup(sd);
   if(!con) {
@@ -109,10 +113,19 @@ static int _handle_writev(long arg0, long arg1, long arg2, long *result){
   //*result = syscall_no_intercept(SYS_writev, arg0, arg1, arg2);
   struct iovec* iov = (struct iovec*)arg1;
   *result = 0;
+  /* set blocking mode */
+
+  int switchback;
+  switchback = set_blocking_mode(sd, 1);
   for(i = 0; i < n; i++){
-    size_t iov_len = (size_t)iov[i].iov_len;
+    ssize_t iov_len = (size_t)iov[i].iov_len;
     uint8_t *iov_base = (uint8_t*)iov[i].iov_base;
     nbytes_sent = _tcpls_do_send(iov_base, iov_len, con->tcpls);
+    if (nbytes_sent < 0) {
+      log_debug("Sending error _tcpls_do_send returned %d", nbytes_sent);
+      *result = nbytes_sent;
+      return SYSCALL_SKIP;
+    }
     *result += nbytes_sent;
     if (nbytes_sent == iov_len) {
       log_debug("called tcpls_send on buffer:%x initial_data:%ld bytes;\
@@ -126,6 +139,8 @@ static int _handle_writev(long arg0, long arg1, long arg2, long *result){
     }
 
   }
+  if (switchback)
+    set_blocking_mode(sd, 0);
   log_debug("TCPLS end writev %d bytes on socket descriptor:%d", *result, sd);
   return SYSCALL_SKIP;
 }

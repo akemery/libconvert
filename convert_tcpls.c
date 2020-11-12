@@ -53,7 +53,7 @@ static void shift_buffer(ptls_buffer_t *buf, size_t delta) {
 int set_blocking_mode(int socket, bool is_blocking)
 {
     int ret = 0;
-    int flags = fcntl(socket, F_GETFL, 0);
+    int flags = syscall_no_intercept(SYS_fcntl, socket, F_GETFL, 0);
     if ((flags & O_NONBLOCK) && !is_blocking) {
       log_debug("set_blocking_mode(): socket was already in non-blocking mode");
       return ret;
@@ -64,7 +64,7 @@ int set_blocking_mode(int socket, bool is_blocking)
     }
    if (flags == -1) return 0;
    flags = is_blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
-   return !fcntl(socket, F_SETFL, flags);
+   return !syscall_no_intercept(SYS_fcntl, socket, F_SETFL, flags);
 }
 
 
@@ -233,7 +233,7 @@ static ptls_context_t *set_tcpls_ctx_options(int is_server){
     if (ptls_load_certificates(ctx, (char *)cert) != 0)
       log_debug("failed to load certificate:%s:%s\n", cert, strerror(errno));
     if(load_private_key(ctx, (char*)cert_key)!=0)
-      log_debug("failed apply ket :%s:%s\n", cert_key, strerror(errno));  
+      log_debug("failed apply ket :%s:%s\n", cert_key, strerror(errno));
   }
 done:
   return ctx;
@@ -368,8 +368,8 @@ int _tcpls_handshake(int sd, tcpls_t *tcpls){
 }
 
 size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcpls) {
-  int ret = 0;
-  struct timeval timeout = {.tv_sec = 2, .tv_usec = 0};
+  int ret = -1;
+  struct timeval timeout = {.tv_sec = 1, .tv_usec = 0};
   if (tcpls_buf.off-tcpls_buf_read_offset >= size) {
     memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset, size);
     if (flags != MSG_PEEK)
@@ -378,12 +378,25 @@ size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcp
       shift_buffer(&tcpls_buf, tcpls_buf_read_offset);
       tcpls_buf_read_offset = 0;
     }
+    /** Set a non-blocking mode to ensure recall */
+    set_blocking_mode(sd, 0);
     return size;
   }
-  else{
+  else if (tcpls_buf.off-tcpls_buf_read_offset > 0) {
+    /** Just returns bytes we already have, if any */
+    memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset,
+        tcpls_buf.off-tcpls_buf_read_offset);
+    ret = tcpls_buf.off-tcpls_buf_read_offset;
+    if (flags != MSG_PEEK)
+      tcpls_buf.off -= ret;
+    set_blocking_mode(sd, 1);
+    return ret;
+  }
+  else {
     while (((ret = tcpls_receive(tcpls->tls, &tcpls_buf, &timeout)) == TCPLS_HOLD_DATA_TO_READ) ||
         (ret == TCPLS_OK && tcpls_buf.off-tcpls_buf_read_offset == 0))
       ;
+
     if (ret == TCPLS_OK) {
       if (tcpls_buf.off-tcpls_buf_read_offset >= size) {
         memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset, size);
@@ -393,6 +406,7 @@ size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcp
           shift_buffer(&tcpls_buf, tcpls_buf_read_offset);
           tcpls_buf_read_offset = 0;
         }
+        set_blocking_mode(sd, 0);
         return size;
       }
       else {
@@ -401,6 +415,7 @@ size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcp
         ret = tcpls_buf.off-tcpls_buf_read_offset;
         if (flags != MSG_PEEK)
           tcpls_buf.off -= ret;
+        set_blocking_mode(sd, 1);
         return ret;
       }
 
@@ -416,10 +431,12 @@ size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, int flags, tcpls_t 
   return _tcpls_do_recv(sd, buf, size, flags, tcpls);
 }
 
-size_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls){
+ssize_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls){
   streamid_t streamid = 0;
+  int ret, sret;
+  struct tcpls_con *con;
   if (tcpls->tls->is_server) {
-     struct tcpls_con *con = list_get(tcpls_con_l, 0);
+     con = list_get(tcpls_con_l, 0);
      if (con)
        streamid = con->streamid;
   }
@@ -430,5 +447,40 @@ size_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls){
     else
       streamid = 0;
   }
-  return tcpls_send(tcpls->tls, streamid, buf, size);
+  /**
+   * The application when seeing TCPLS_HOLD_DATA_TO_SEND, should wait to call
+   * again
+   *
+   * this is a bit inneficient -- ideally we would want to wait for a socket
+   * event to tell us that we have room for sending more; and letting the app
+   * to do something else in the meantime. that seems difficult to get for an
+   * interception layer
+   */
+  if ((ret = tcpls_send(tcpls->tls, streamid, buf, size)) == TCPLS_HOLD_DATA_TO_SEND) {
+    /** Kernel's sending buffer is fool, but tcpls hold some encrypted data to
+     * send */
+    fd_set writefds;
+    FD_ZERO(&writefds);
+    FD_SET(con->sd, &writefds);
+    struct timeval timeout = {.tv_sec=2, .tv_usec=0};
+    while (ret == TCPLS_HOLD_DATA_TO_SEND && (sret = select(con->sd+1, NULL, &writefds, NULL, &timeout)) > 0) {
+      /*Sending TCPLS's internal data */
+      ret = tcpls_send(tcpls->tls, streamid, buf, 0);
+      FD_ZERO(&writefds);
+      FD_SET(con->sd, &writefds);
+    }
+    if (ret == TCPLS_OK)
+      return size;
+    else {
+      log_debug("Something went wrong while looping on sending hold data: ret=%d", ret);
+      return ret;
+    }
+  }
+  else if (ret == TCPLS_OK) {
+    return size;
+  }
+  else {
+    log_debug("tcpls_send did not successfully send all its data, and returned error %d", ret);
+    return ret;
+  }
 }

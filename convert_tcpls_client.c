@@ -89,11 +89,7 @@ static int _handle_write(long arg0, long arg1, long arg2, long *result){
   if(!con)
     return SYSCALL_RUN;
   //*result = syscall_no_intercept(SYS_write, arg0, arg1, arg2);
-  int switchback;
-  switchback = set_blocking_mode(sd, 1);
   *result = _tcpls_do_send(buff, size, con->tcpls);
-  if (switchback)
-    set_blocking_mode(sd, 0);
   if(*result >= 0){
     log_debug("TCPLS write on socket descriptor %d, %d bytes written", sd, *result);
     return SYSCALL_SKIP;

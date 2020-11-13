@@ -55,15 +55,16 @@ int set_blocking_mode(int socket, bool is_blocking)
     int ret = 0;
     int flags = syscall_no_intercept(SYS_fcntl, socket, F_GETFL, 0);
     if ((flags & O_NONBLOCK) && !is_blocking) {
-      log_debug("set_blocking_mode(): socket was already in non-blocking mode");
+      log_debug("set_blocking_mode(): socket %d was already in non-blocking mode", socket);
       return ret;
     }
     if (!(flags & O_NONBLOCK) && is_blocking) {
-      log_debug("set_blocking_mode(): socket was already in blocking mode");
+      log_debug("set_blocking_mode(): socket was already in blocking mode", socket);
       return ret;
     }
    if (flags == -1) return 0;
    flags = is_blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
+   is_blocking ? log_debug("Set socket %d in blocking mode", socket) : log_debug("set socket %d in non-blocking mode", socket);
    return !syscall_no_intercept(SYS_fcntl, socket, F_SETFL, flags);
 }
 
@@ -378,19 +379,11 @@ size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcp
       shift_buffer(&tcpls_buf, tcpls_buf_read_offset);
       tcpls_buf_read_offset = 0;
     }
-    /** Set a non-blocking mode to ensure recall */
-    set_blocking_mode(sd, 0);
+    /** Set a non-blocking mode to ensure application's select won't block
+     *  if no any more bytes are awaing on the socket */
+    if(!set_blocking_mode(sd, 0))
+      log_debug("set_blocking_mode failed");
     return size;
-  }
-  else if (tcpls_buf.off-tcpls_buf_read_offset > 0) {
-    /** Just returns bytes we already have, if any */
-    memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset,
-        tcpls_buf.off-tcpls_buf_read_offset);
-    ret = tcpls_buf.off-tcpls_buf_read_offset;
-    if (flags != MSG_PEEK)
-      tcpls_buf.off -= ret;
-    set_blocking_mode(sd, 1);
-    return ret;
   }
   else {
     while (((ret = tcpls_receive(tcpls->tls, &tcpls_buf, &timeout)) == TCPLS_HOLD_DATA_TO_READ) ||
@@ -406,7 +399,8 @@ size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcp
           shift_buffer(&tcpls_buf, tcpls_buf_read_offset);
           tcpls_buf_read_offset = 0;
         }
-        set_blocking_mode(sd, 0);
+        if(!set_blocking_mode(sd, 0))
+          log_debug("set_blocking_mode failed");
         return size;
       }
       else {
@@ -415,7 +409,8 @@ size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcp
         ret = tcpls_buf.off-tcpls_buf_read_offset;
         if (flags != MSG_PEEK)
           tcpls_buf.off -= ret;
-        set_blocking_mode(sd, 1);
+        if(!set_blocking_mode(sd, 1))
+          log_debug("set_blocking_mode failed");
         return ret;
       }
 

@@ -12,7 +12,6 @@
 #include <picotcpls.h>
 #include "picotls/openssl.h"
 
-#include "convert_util.h"
 #include "convert_tcpls.h"
 
 static FILE *		_log;

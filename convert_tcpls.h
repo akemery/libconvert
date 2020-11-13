@@ -1,3 +1,14 @@
+#ifndef _CONVERT_TCPLS_H
+#define _CONVERT_TCPLS_H
+
+#ifndef UNUSED
+#ifdef __GNUC__
+#define UNUSED __attribute__((__unused__))
+#else
+#define UNUSED
+#endif
+#endif
+
 int _tcpls_init(int is_server);
 struct tcpls_con * _tcpls_alloc_con_info(int sd, int is_server, int af_family);
 struct tcpls_con *_tcpls_lookup(int sd);
@@ -31,3 +42,5 @@ enum {
   SYSCALL_SKIP	= 0,
   SYSCALL_RUN	= 1,
 };
+
+#endif

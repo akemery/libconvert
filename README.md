@@ -17,20 +17,21 @@ This is work in progress. The `libconvert_tcpls_client` library currently only s
 Fetch the Git submodules:
 ```
 $ cd tcplslibconvert
-$ git submodule init && git submodule update
-$ cd lib/picotcpls
-$ git pull https://github.com/frochet/picotcpls.git tcpls/ldpreload
-$ git submodule init && git submodule update
+$ git submodule update --init --recursive --remote
 ```
 
 The easiest way to build both libraries and run the tests is with the provided Dockerfile (which contains all deps):
 ```
 $ cd tcplslibconvert
-$ sudo docker build -t uac.bj/libconvert .
-$ sudo docker run  -v $PWD:/lc -it uac.bj/libconvert
+$ docker build -t tcplslibconvert .
+$ docker run -v $PWD:/lc -it tcplslibconvert
 $ cd lc
-$ bash install_lib.sh
 $ mkdir build && cd build && cmake .. && make
+```
+
+Note, to use gdb without trouble on the preload library, you can do :
+```
+$ docker run --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v $PWD:/lc -it tcplslibconvert
 ```
 
 You need a client and a server so you have to run two docker instances. 
@@ -47,29 +48,25 @@ To use the `libconvert_server`  and `libconvert_client` libs:
 Run the following command in two different terminal to have two docker instances.
 ```
 $ cd tcplslibconvert 
-$ sudo docker run  -v $PWD:/lc -it uac.bj/libconvert
+$ docker run  -v $PWD:/lc -it tcplslibconvert
 ```
 Assuming the server has the address 172.17.0.2 and the client has the address 172.17.0.3
 
 Client side:
 ```
 # cd lc/build
-# CONVERT_LOG=./client_converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_client.so wget http://172.17.0.2
-# CONVERT_LOG=./client_converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_client.so /usr/local/apache2/bin/ab -n 100 -c 10 http://172.17.0.2/
+# CONVERT_LOG=./client_converter.log LD_PRELOAD=./libconvert_tcpls_client.so wget http://172.17.0.2
+# CONVERT_LOG=./client_converter.log LD_PRELOAD=./libconvert_tcpls_client.so /usr/local/apache2/bin/ab -n 100 -c 10 http://172.17.0.2/
 ```
 Server side: 
 ```
 # cd lc/build
-# CONVERT_LOG=./server_converter.log   LD_LIBRARY_PATH=. LD_PRELOAD=libconvert_tcpls_server.so /usr/local/apache2/bin/apachectl -k start 
+# CONVERT_LOG=./server_converter.log LD_PRELOAD=./libconvert_tcpls_server.so /usr/local/apache2/bin/httpd -X
 ```
 
 The library supports IPv6 as well.
 
 Currently tested with `curl`, `wget` and `apache2` Ubuntu {19}.
-
-The library is known to *not* work on Ubuntu 20 due to incompatibilities between `lib_syscall_intercept` and `libc 20.30-1`. This issue is tracked [here](https://github.com/pmem/syscall_intercept/issues/97).
-
-
 
 ### Contact
 

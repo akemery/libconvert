@@ -1,7 +1,7 @@
 FROM ubuntu:19.04
 
-LABEL maintainer="Tessares (contact gregory.vanderschueren@tessares.net)"
-LABEL description="All deps for building & running tests of libconvert"
+LABEL maintainer=""
+LABEL description=""
 
 # Ubuntu 19.04 is EOL
 RUN sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
@@ -16,9 +16,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     cppcheck \
     curl \
+    faketime \
     iproute2 \
     iptables \
+    gdb \
+    git \
     libcapstone-dev \
+    libgnutls28-dev \
+    libscope-guard-perl \
+    libssl-dev \
+    libtest-tcp-perl \
     pandoc \
     pkg-config \
     python3 \
@@ -27,6 +34,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-wheel \
     tcpdump \
     uncrustify \
+    valgrind \
+    vim \
     wget
 
 RUN pip3 install scapy

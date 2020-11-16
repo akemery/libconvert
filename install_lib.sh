@@ -36,14 +36,14 @@ dpkg -i openssh-server_8.3p1-1_amd64.deb
 tar  -xf pcre-8.44.tar.bz2
 cd pcre-8.44
 ./configure
-make
+make -j
 make install
 cd /lc
 
 tar  -xf expat-2.2.9.tar.bz2
 cd expat-2.2.9
 ./configure --prefix=/usr/local/bin/
-make
+make -j
 make install
 cd /lc
 tar xvf  apr-util-1.6.1.tar.gz
@@ -56,7 +56,7 @@ cp -r apr-1.7.0/* httpd-2.4.46/srclib/apr/
 
 cd httpd-2.4.46
 ./configure --with-pcre=/usr/local/bin/pcre-config --with-expat=/usr/local/bin/
-make
+make -j
 make install
 ldconfig
 truncate -s 1M  /usr/local/apache2/htdocs/1M

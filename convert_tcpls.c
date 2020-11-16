@@ -26,7 +26,6 @@ static int tcpls_buf_read_offset = 0;
 
 static ptls_context_t *ctx;
 //static tcpls_t *tcpls;
-static struct cli_data cli_data;
 static list_t *tcpls_con_l = NULL;
 static list_t *ours_addr_list = NULL;
 
@@ -107,17 +106,20 @@ static int handle_connection_event(tcpls_event_t event, int socket, int
 
 static int handle_client_connection_event(tcpls_event_t event, int socket, int
     transportid, void *cbdata) {
-  struct cli_data *data = (struct cli_data*) cbdata;
+  list_t *conntcpls = (list_t*) cbdata;
+  struct tcpls_con *con = list_get(conntcpls, 0);
+  assert(con);
   switch (event) {
     case CONN_CLOSED:
       log_debug("connection_event_call_back: Received a CONN_CLOSED; removing\
           the socket %d transportid %d", socket, transportid);
-      list_remove(data->socklist, &socket); 
       break;
     case CONN_OPENED:
       log_debug("connection_event_call_back: Received a CONN_OPENED; adding the\
           socket descriptor %d transport id %d", socket, transportid);
-      list_add(data->socklist, &socket);
+      /** uncessary in this simple intercept */
+      con->sd = socket;
+      con->transportid = transportid;
       break;
     default: break;
   }
@@ -127,17 +129,18 @@ static int handle_client_connection_event(tcpls_event_t event, int socket, int
 
 static int handle_client_stream_event(tcpls_t *tcpls, tcpls_event_t event, streamid_t streamid,
     int transportid, void *cbdata) {
-  struct cli_data *data = (struct cli_data*) cbdata;
+  list_t *conntcpls = (list_t*) cbdata;
+  struct tcpls_con *con = list_get(conntcpls, 0);
+  assert(con);
   switch (event) {
     case STREAM_OPENED:
       log_debug("stream_event_call_back: Handling stream_opened callback\
           transportid :%d:%p", transportid, tcpls);
-      list_add(data->streamlist, &streamid);
+      con->streamid = streamid;
       break;
     case STREAM_CLOSED:
       log_debug("stream_event_call_back: Handling stream_closed callback %d:%p",
           transportid, tcpls);
-      list_remove(data->streamlist, &streamid);
       break;
     default: break;
   }
@@ -158,7 +161,6 @@ static int handle_stream_event(tcpls_t *tcpls, tcpls_event_t event,
         if (con->tcpls == tcpls && con->transportid == transportid) {
           con->streamid = streamid;
           con->is_primary = 1;
-          con->wants_to_write = 1;
         }
       }
       break;
@@ -171,7 +173,6 @@ static int handle_stream_event(tcpls_t *tcpls, tcpls_event_t event,
           log_debug("We're stopping to write on the connection linked to\
               transportid %d %d\n", transportid, con->sd);
           con->is_primary = 0;
-          con->wants_to_write = 0;
         }
       }
       break;
@@ -217,19 +218,14 @@ static ptls_context_t *set_tcpls_ctx_options(int is_server){
     tcpls_con_l = new_list(sizeof(struct tcpls_con),2);
   if(!ours_addr_list)
     ours_addr_list = new_list(sizeof(struct sockaddr), 2);
+  ctx->cb_data = tcpls_con_l;
   if(!is_server){
     ctx->send_change_cipher_spec = 1;
-    list_t *socklist = new_list(sizeof(int), 2);
-    list_t *streamlist = new_list(sizeof(tcpls_stream_t), 2);
-    cli_data.socklist = socklist;
-    cli_data.streamlist = streamlist;
-    ctx->cb_data = &cli_data;
     ctx->stream_event_cb = &handle_client_stream_event;
     ctx->connection_event_cb = &handle_client_connection_event;
   }else{
     ctx->stream_event_cb = &handle_stream_event;
     ctx->connection_event_cb = &handle_connection_event;
-    ctx->cb_data = tcpls_con_l;
     if (ptls_load_certificates(ctx, (char *)cert) != 0)
       log_debug("failed to load certificate:%s:%s\n", cert, strerror(errno));
     if(load_private_key(ctx, (char*)cert_key)!=0)
@@ -429,17 +425,11 @@ ssize_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls){
   streamid_t streamid = 0;
   int ret, sret;
   struct tcpls_con *con;
-  if (tcpls->tls->is_server) {
-     con = list_get(tcpls_con_l, 0);
-     if (con)
-       streamid = con->streamid;
-  }
+  con = list_get(tcpls_con_l, 0);
+  if (con && tcpls->tls->is_server)
+    streamid = con->streamid;
   else {
-    if (cli_data.streamlist->size > 0) {
-      streamid = *((streamid_t*) list_get(cli_data.streamlist, 0));
-    }
-    else
-      streamid = 0;
+    streamid = 0;
   }
   /**
    * The application when seeing TCPLS_HOLD_DATA_TO_SEND, should wait to call

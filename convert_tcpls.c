@@ -380,6 +380,17 @@ size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcp
       log_debug("set_blocking_mode failed");
     return size;
   }
+  else if (tcpls_buf.off-tcpls_buf_read_offset > 0) {
+    /** Just returns bytes we already have, if any */
+    memcpy(buf, tcpls_buf.base+tcpls_buf_read_offset,
+        tcpls_buf.off-tcpls_buf_read_offset);
+    ret = tcpls_buf.off-tcpls_buf_read_offset;
+    if (flags != MSG_PEEK)
+      tcpls_buf.off -= ret;
+    if (!set_blocking_mode(sd, 1))
+      log_debug("set_blocking mode failed");
+    return ret;
+  }
   else {
     while (((ret = tcpls_receive(tcpls->tls, &tcpls_buf, &timeout)) == TCPLS_HOLD_DATA_TO_READ) ||
         (ret == TCPLS_OK && tcpls_buf.off-tcpls_buf_read_offset == 0))

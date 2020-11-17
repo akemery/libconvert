@@ -21,6 +21,7 @@ size_t _tcpls_do_recv(int sd, uint8_t *buf, size_t size, int flags, tcpls_t *tcp
 size_t _tcpls_do_recvfrom(int sd, uint8_t *buf, size_t size, int flags, tcpls_t * tcpls);
 ssize_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls);
 int set_blocking_mode(int socket, bool is_blocking);
+int handle_select(long readfds, long writefds, long *result);
 
 struct tcpls_con {
   int sd;

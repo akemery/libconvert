@@ -235,6 +235,57 @@ done:
   return ctx;
 }
 
+/**
+ * Only handle 1 read/write socket so far; we do not need more capability at the
+ * moment
+ */
+
+static int tcpls_hold_data_to_read_or_write(fd_set *readfds, fd_set *writefds) {
+  struct tcpls_con *con;
+  /** check whether we have something to read */
+  int res = 0;
+  if (tcpls_buf.off - tcpls_buf_read_offset > 0 && readfds) {
+    for (int i = 0; i < tcpls_con_l->size; i++) {
+      con = list_get(tcpls_con_l, i);
+      if (FD_ISSET(con->sd, readfds)) {
+        FD_ZERO(readfds);
+        FD_SET(con->sd, readfds);
+        res += 1;
+        break;
+      }
+    }
+  }
+  /** check whether we have something to write */
+  if (writefds) {
+    for (int i = 0; i < tcpls_con_l->size; i++) {
+      con = list_get(tcpls_con_l, i);
+      if (FD_ISSET(con->sd, writefds)) {
+        FD_ZERO(writefds);
+        FD_SET(con->sd, writefds);
+        res += 1;
+        break;
+      }
+    }
+  }
+  return res;
+}
+
+
+/**
+ * returns 1 and set modifies readfds/writefds appropriatly if we still
+ * have something to read/write in tcpls
+ *
+ */
+
+int handle_select(long arg1, long arg2, long *result) {
+  fd_set *readfds = (fd_set*) arg1;
+  fd_set *writefds = (fd_set*) arg2;
+  if ((*result = tcpls_hold_data_to_read_or_write(readfds, writefds)) > 0) {
+    return SYSCALL_SKIP;
+  }
+  return SYSCALL_RUN;
+}
+
 static int tcpls_do_handshake(int sd, tcpls_t *tcpls){
   int result = -1;
   ptls_handshake_properties_t prop = {NULL};
@@ -458,7 +509,7 @@ ssize_t _tcpls_do_send(uint8_t *buf, size_t size, tcpls_t *tcpls){
     FD_ZERO(&writefds);
     FD_SET(con->sd, &writefds);
     struct timeval timeout = {.tv_sec=2, .tv_usec=0};
-    while (ret == TCPLS_HOLD_DATA_TO_SEND && (sret = select(con->sd+1, NULL, &writefds, NULL, &timeout)) > 0) {
+    while (ret == TCPLS_HOLD_DATA_TO_SEND && (sret = syscall_no_intercept(SYS_select, con->sd+1, NULL, &writefds, NULL, &timeout)) > 0) {
       /*Sending TCPLS's internal data */
       ret = tcpls_send(tcpls->tls, streamid, buf, 0);
       FD_ZERO(&writefds);

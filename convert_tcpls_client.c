@@ -18,6 +18,12 @@ static FILE *		_log;
 static int client_initialized = 0;
 
 
+static int _handle_select(long arg1, long arg2, long *result) {
+  if (!client_initialized)
+    return SYSCALL_RUN;
+  return handle_select(arg1, arg2, result);
+}
+
 static int _handle_connect(long arg0, long arg1,  UNUSED long arg2, long *result){
   struct sockaddr *dest	= (struct sockaddr *)arg1;
   int sd = (int)arg0, ret;
@@ -119,7 +125,7 @@ static int _handle_close(long arg0, long *result){
 
 static int
 _hook(long syscall_number, long arg0, long arg1, long arg2, long UNUSED arg3,
-       long arg4,  long arg5, long *result){
+       UNUSED long arg4,  long arg5, long *result){
   switch(syscall_number){
     case SYS_connect:
       return _handle_connect(arg0, arg1,  arg2, result);
@@ -132,6 +138,8 @@ _hook(long syscall_number, long arg0, long arg1, long arg2, long UNUSED arg3,
       return _handle_sendto(arg0, arg1, arg2, arg3, arg4, arg5, result);
     case SYS_write:
       return _handle_write(arg0, arg1, arg2, result);
+    case SYS_select:
+      return _handle_select(arg1, arg2, result);
     default:
       /* The default behavior is to run the default syscall. */
       return SYSCALL_RUN;

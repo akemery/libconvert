@@ -20,6 +20,13 @@
 static FILE *		_log;
 static int server_initialized = 0;
 
+
+static int _handle_select(long arg1, long arg2, long *result) {
+  if (!server_initialized)
+    return SYSCALL_RUN;
+  return handle_select(arg1, arg2, result);
+}
+
 static int _handle_bind(long arg0, long arg1, long arg2, long *result){
   int sd = (int)arg0;
   *result = syscall_no_intercept(SYS_bind, arg0, arg1, arg2);
@@ -87,11 +94,11 @@ static int _handle_recv(long arg0, long arg1, long arg2, long arg3, long *result
     log_debug("No tcpls con linked to socket %d", sd);
     return SYSCALL_RUN;
   }
-  /*int switchback;*/
-  /*switchback = set_blocking_mode(sd, 1);*/
+  int switchback;
+  switchback = set_blocking_mode(sd, 1);
   *result = _tcpls_do_recv(sd, buf, size, flags, con->tcpls);
-  /*if (switchback)*/
-    /*set_blocking_mode(sd, 0);*/
+  if (switchback)
+    set_blocking_mode(sd, 0);
   if(*result >= 0){
     log_debug("TCPLS read on socket descriptor :%d received :%d bytes", sd, *result);
     return SYSCALL_SKIP;
@@ -209,6 +216,8 @@ _hook(long syscall_number, long arg0, long arg1,  long arg2, long  arg3,
       return _handle_close(arg0, result);
     case SYS_shutdown:
       return _handle_shutdown(arg0, arg1, result);
+    case SYS_select:
+      return _handle_select(arg1, arg2, result);
     default:
       /* The default behavior is to run the default syscall. */
       return SYSCALL_RUN;
